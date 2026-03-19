@@ -9,15 +9,27 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 from reportlab.platypus import Image, KeepInFrame, ListFlowable, ListItem, Table, TableStyle
 from reportlab.pdfbase import pdfmetrics
+# from reportlab.pdfbase.pdfmetrics import registerFontFamily
 
 # ----------------------------
 # Register Fonts
 # ----------------------------
 pdfmetrics.registerFont(TTFont("TitleFont", "fonts/PoynterOldStyle/PoynterOldstyleText-Roman.ttf"))
 pdfmetrics.registerFont(TTFont("BodyFont", "fonts/Outfit/Outfit-Regular.ttf"))
+pdfmetrics.registerFont(TTFont("BodyFont-Bold", "fonts/Outfit/Outfit-Bold.ttf"))
+pdfmetrics.registerFont(TTFont("BodyFont-Italic", "fonts/Inter/Inter_18pt-Italic.ttf"))
+pdfmetrics.registerFont(TTFont("BodyFont-BoldItalic", "fonts/Inter/Inter_18pt-BoldItalic.ttf"))
 pdfmetrics.registerFont(TTFont("Body2Font", "fonts/Outfit/Outfit-SemiBold.ttf"))
 pdfmetrics.registerFont(TTFont("HeadingFont","fonts/BiondiSans/biondi-sans-bd.ttf"))
 pdfmetrics.registerFont(TTFont("PageFont", "fonts/BiondiSans/biondi-sans-rg.ttf"))
+
+pdfmetrics.registerFontFamily(
+    "BodyFont",
+    normal="BodyFont",
+    bold="BodyFont-Bold",
+    italic="BodyFont-Italic",
+    boldItalic="BodyFont-BoldItalic"
+)
 
 # ----------------------------
 # Styles
@@ -97,7 +109,7 @@ M1_STYLE = ParagraphStyle(
 QUEST_STYLE = ParagraphStyle(
     name="Body",
     fontName="BodyFont",
-    fontSize=9,
+    fontSize=10,
     leading=12,
     leftIndent=122,
     firstLineIndent=-12,
@@ -107,7 +119,7 @@ QUEST_STYLE = ParagraphStyle(
 AP_STYLE = ParagraphStyle(
     name="Body",
     fontName="BodyFont",
-    fontSize=11,
+    fontSize=10,
     leading=12,
     leftIndent=12,
     firstLineIndent=-12,
@@ -334,6 +346,8 @@ def generate_pdf(txt_path, title_path, bg_path):
         
         box_flow = []
 
+        content_flow = []
+        # quest_box =[]
         question_icon = Image("icons/PP.png", width=10, height=15)
         question_table = Table(
             [[(Paragraph("PERTANYAAN PERENUNGAN", HEADING_STYLE)),(question_icon)]],
@@ -349,15 +363,22 @@ def generate_pdf(txt_path, title_path, bg_path):
             ("TOPPADDING", (0,0), (-1,-1), 2)
         ]))
 
-        box_flow.append(question_table)
+        content_flow.append(question_table)
 
         if day["questions"]:
             for i, q in enumerate(day["questions"], start=1):
-                box_flow.append(Paragraph(f"{i}. {q}", QUEST_STYLE))
+                content_flow.append(Paragraph(f"{i}. {q}", QUEST_STYLE))
 
-        box_flow.append(Spacer(1,5))
+        # quest_frame = KeepInFrame(
+        #     maxWidth=doc.width,
+        #     maxHeight=70,
+        #     content=quest_box,
+        #     mode="shrink"
+        # )
 
-        content_flow = []
+        content_flow.append(Spacer(1,3))
+        # box_flow.append(quest_frame)
+
 
         # CONTEXT
         context_icon = Image("icons/K.png", width=15.2*1.1, height=16.9*1.1)
@@ -425,7 +446,7 @@ def generate_pdf(txt_path, title_path, bg_path):
 
         boxed_frame = KeepInFrame(
             maxWidth=doc.width,
-            maxHeight=300,
+            maxHeight=370,
             content=content_flow,
             mode="shrink"
         )
