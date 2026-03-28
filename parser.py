@@ -22,7 +22,7 @@ def extract_list(pattern, text):
 def extract_week_info(text):
     week = extract(r"(Week\s+\d+)", text)
     month = extract(r"Week\s+\d+\s+([A-Za-z]+\s+\d{4})", text)
-    period = re.search(r"\d{1,2}(?:\s+[A-Za-z]+)?\s*-\s*\d{1,2}\s+[A-Za-z]+(?:\s+\d{4})").group(0)
+    period = re.search(r"\d{1,2}(?:\s+[A-Za-z]+)?\s*-\s*\d{1,2}\s+[A-Za-z]+(?:\s+\d{4})", text).group(0)
     return week, month, period
 
 
