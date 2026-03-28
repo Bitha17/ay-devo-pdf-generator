@@ -25,7 +25,7 @@
 
         h2 {
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             color: #333;
         }
 
@@ -38,7 +38,14 @@
         input[type="file"] {
             width: 100%;
             margin-top: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+        }
+
+        small {
+            display: block;
+            margin-bottom: 10px;
+            color: red;
+            font-size: 12px;
         }
 
         button {
@@ -58,6 +65,18 @@
             background: #5a67d8;
         }
 
+        button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+
+        #preview {
+            display: none;
+            max-width: 100%;
+            margin-top: 10px;
+            border-radius: 8px;
+        }
+
         .footer {
             margin-top: 15px;
             text-align: center;
@@ -72,21 +91,77 @@
 <div class="container">
     <h2>📄 Generate PDF</h2>
 
-    <form action="/generate" method="post" enctype="multipart/form-data">
+    <form id="uploadForm" action="/generate" method="post" enctype="multipart/form-data">
         
         <label>Upload TXT File</label>
-        <input type="file" name="txt" required>
+        <input type="file" id="txtFile" name="txt" accept=".txt" required>
+        <small id="txtError"></small>
 
         <label>Upload Title Image</label>
-        <input type="file" name="title" required>
+        <input type="file" id="imgFile" name="title" accept="image/png, image/jpeg" required>
+        <small id="imgError"></small>
 
-        <button type="submit">Generate PDF</button>
+        <img id="preview">
+
+        <button type="submit" id="submitBtn">Generate PDF</button>
     </form>
 
     <div class="footer">
         AbbaYouth PDF Generator
     </div>
 </div>
+
+<script>
+const txtInput = document.getElementById("txtFile");
+const imgInput = document.getElementById("imgFile");
+const txtError = document.getElementById("txtError");
+const imgError = document.getElementById("imgError");
+const preview = document.getElementById("preview");
+const form = document.getElementById("uploadForm");
+const submitBtn = document.getElementById("submitBtn");
+
+// TXT validation
+txtInput.addEventListener("change", function () {
+    const file = this.files[0];
+    txtError.textContent = "";
+
+    if (file && !file.name.toLowerCase().endsWith(".txt")) {
+        txtError.textContent = "File must be .txt";
+        this.value = "";
+    }
+});
+
+// IMAGE validation + preview
+imgInput.addEventListener("change", function () {
+    const file = this.files[0];
+    imgError.textContent = "";
+    preview.style.display = "none";
+
+    if (file && !file.type.startsWith("image/")) {
+        imgError.textContent = "File must be an image (PNG/JPG)";
+        this.value = "";
+        return;
+    }
+
+    if (file) {
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = "block";
+    }
+});
+
+// Prevent invalid submit + loading state
+form.addEventListener("submit", function (e) {
+    if (!txtInput.files.length || !imgInput.files.length) {
+        e.preventDefault();
+        alert("Please upload valid files first!");
+        return;
+    }
+
+    // Loading state
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Generating PDF...";
+});
+</script>
 
 </body>
 </html>
