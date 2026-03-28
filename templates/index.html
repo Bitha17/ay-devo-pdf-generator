@@ -1,115 +1,190 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>PDF Generator</title>
+<meta charset="UTF-8">
+<title>PDF Generator</title>
 
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            height: 100vh;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
 
-        .container {
-            background: white;
-            padding: 30px 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            width: 350px;
-        }
+    .wrapper {
+        display: flex;
+        gap: 30px;
+        width: 95%;
+        max-width: 1200px;
+        align-items: stretch;
+    }
 
-        h2 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #333;
-        }
+    .container {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        width: 350px;
+        height: 80vh;
 
-        label {
-            font-weight: 600;
-            font-size: 14px;
-            color: #555;
-        }
+        display: flex;
+        flex-direction: column;
+    }
 
-        input[type="file"] {
-            width: 100%;
-            margin-top: 8px;
-            margin-bottom: 10px;
-        }
+    .preview-container {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        flex: 1;
+        height: 80vh;
 
-        small {
-            display: block;
-            margin-bottom: 10px;
-            color: red;
-            font-size: 12px;
-        }
+        display: flex;
+        flex-direction: column;
+    }
 
-        button {
-            width: 100%;
-            padding: 12px;
-            background: #667eea;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-        }
+    h2, h3 {
+        text-align: center;
+        margin-bottom: 10px;
+        color: #333;
+    }
 
-        button:hover {
-            background: #5a67d8;
-        }
+    label {
+        font-weight: 600;
+        font-size: 14px;
+        color: #555;
+    }
 
-        button:disabled {
-            background: #aaa;
-            cursor: not-allowed;
-        }
+    input[type="file"] {
+        width: 100%;
+        margin-top: 8px;
+        margin-bottom: 10px;
+    }
 
-        #preview {
-            display: none;
-            width: auto;
-            height: 200px;
-            margin: 10px auto;
-            border-radius: 8px;
-        }
+    small {
+        display: block;
+        margin-bottom: 10px;
+        color: red;
+        font-size: 12px;
+    }
 
-        .footer {
-            margin-top: 15px;
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-        }
-    </style>
+    button {
+        width: 100%;
+        padding: 12px;
+        background: #667eea;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    button:hover {
+        background: #5a67d8;
+    }
+
+    button:disabled {
+        background: #aaa;
+        cursor: not-allowed;
+    }
+
+    /* FORM SCROLL AREA */
+    .form-content {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 5px;
+    }
+
+    /* IMAGE PREVIEW */
+    #previewImg {
+        display: none;
+        width: 325px;
+        max-height: 250px;
+        object-fit: contain;
+        margin-top: 10px;
+        border-radius: 8px;
+        padding: 10px;
+        background: #f3f4f6;
+    }
+
+    /* PDF PREVIEW */
+    .pdf-preview {
+        width: 100%;
+        flex: 1;
+        display: none;
+        border-radius: 10px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    }
+
+    .filename {
+        font-size: 13px;
+        color: #666;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .footer {
+        position: fixed;
+        bottom: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        color: #eee;
+        text-align: center;
+    }
+</style>
 </head>
 
 <body>
 
-<div class="container">
-    <h2>📄 Generate PDF</h2>
+<div class="wrapper">
 
-    <form id="uploadForm" action="/generate" method="post" enctype="multipart/form-data">
+    <!-- LEFT: FORM -->
+    <div class="container">
+        <h2>📄 Generate PDF</h2>
+
+        <form id="uploadForm" class="form-content">
+            
+            <label>Upload TXT File</label>
+            <input type="file" id="txtFile" name="txt" accept=".txt" required>
+            <small id="txtError"></small>
+
+            <label>Upload Title Image</label>
+            <input type="file" id="imgFile" name="title" accept="image/png, image/jpeg" required>
+            <small id="imgError"></small>
+
+            <!-- Image preview -->
+            <img id="previewImg">
+        </form>
+
+        <!-- FIXED BUTTON -->
+        <button type="submit" form="uploadForm" id="submitBtn">
+            Generate PDF
+        </button>
         
-        <label>Upload TXT File</label>
-        <input type="file" id="txtFile" name="txt" accept=".txt" required>
-        <small id="txtError"></small>
-
-        <label>Upload Title Image</label>
-        <input type="file" id="imgFile" name="title" accept="image/png, image/jpeg" required>
-        <small id="imgError"></small>
-
-        <img id="preview">
-
-        <button type="submit" id="submitBtn">Generate PDF</button>
-    </form>
-
-    <div class="footer">
-        AbbaYouth Devotion PDF Generator | by Tabitha Permalla
     </div>
+    
+    <!-- RIGHT: PREVIEW -->
+    <div class="preview-container">
+        <h3>📄 Preview</h3>
+        <div id="fileName" class="filename"></div>
+        
+        <embed id="pdfPreview" class="pdf-preview" type="application/pdf">
+
+        <a id="downloadLink" style="display:none; margin-top:10px;">
+            <button>⬇ Download PDF</button>
+        </a>
+    </div>
+    
+</div>
+<div class="footer">
+    AbbaYouth Devotion PDF Generator | by Tabitha Permalla
 </div>
 
 <script>
@@ -117,9 +192,13 @@ const txtInput = document.getElementById("txtFile");
 const imgInput = document.getElementById("imgFile");
 const txtError = document.getElementById("txtError");
 const imgError = document.getElementById("imgError");
-const preview = document.getElementById("preview");
+const previewImg = document.getElementById("previewImg");
 const form = document.getElementById("uploadForm");
 const submitBtn = document.getElementById("submitBtn");
+
+const pdfPreview = document.getElementById("pdfPreview");
+const downloadLink = document.getElementById("downloadLink");
+const fileNameText = document.getElementById("fileName");
 
 // TXT validation
 txtInput.addEventListener("change", function () {
@@ -136,31 +215,55 @@ txtInput.addEventListener("change", function () {
 imgInput.addEventListener("change", function () {
     const file = this.files[0];
     imgError.textContent = "";
-    preview.style.display = "none";
-
+    previewImg.style.display = "none";
+    
     if (file && !file.type.startsWith("image/")) {
-        imgError.textContent = "File must be an image (PNG/JPG)";
+        imgError.textContent = "File must be an image";
         this.value = "";
         return;
     }
-
+    
     if (file) {
-        preview.src = URL.createObjectURL(file);
-        preview.style.display = "block";
+        previewImg.src = URL.createObjectURL(file);
+        previewImg.style.display = "block";
     }
 });
 
-// Prevent invalid submit + loading state
-form.addEventListener("submit", function (e) {
+// SUBMIT (AJAX)
+form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    
     if (!txtInput.files.length || !imgInput.files.length) {
-        e.preventDefault();
         alert("Please upload valid files first!");
         return;
     }
 
-    // Loading state
     submitBtn.disabled = true;
     submitBtn.textContent = "Generating PDF...";
+
+    const formData = new FormData(this);
+    
+    const res = await fetch("/generate", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await res.json();
+
+    // Set preview
+    pdfPreview.src = data.preview_url;
+    pdfPreview.style.display = "block";
+
+    // Set filename
+    fileNameText.textContent = data.filename;
+
+    // Download button
+    downloadLink.href = data.download_url;
+    downloadLink.download = data.filename;
+    downloadLink.style.display = "block";
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Generate PDF";
 });
 </script>
 
