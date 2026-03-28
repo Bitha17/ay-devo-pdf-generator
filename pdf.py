@@ -431,7 +431,7 @@ def generate_pdf(txt_path, title_path, bg_path):
         content_flow.append(Spacer(1,6))
 
         # APLIKASI
-        ap_icon = Image("icons/AP.png", width=17.2*1.1, height=16.3*1.1)
+        ap_icon = Image(os.path.join(BASE_DIR, "icons","/AP.png"), width=17.2*1.1, height=16.3*1.1)
         ap_table = Table(
             [[(Paragraph("APLIKASI", HEADING_STYLE)),(ap_icon)]],
             colWidths=[doc.width * 0.55, doc.width * 0.45],
