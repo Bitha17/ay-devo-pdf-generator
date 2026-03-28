@@ -9,19 +9,22 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 from reportlab.platypus import Image, KeepInFrame, ListFlowable, ListItem, Table, TableStyle
 from reportlab.pdfbase import pdfmetrics
-# from reportlab.pdfbase.pdfmetrics import registerFontFamily
+from io import BytesIO
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ----------------------------
 # Register Fonts
 # ----------------------------
-pdfmetrics.registerFont(TTFont("TitleFont", "fonts/PoynterOldStyle/PoynterOldstyleText-Roman.ttf"))
-pdfmetrics.registerFont(TTFont("BodyFont", "fonts/Outfit/Outfit-Regular.ttf"))
-pdfmetrics.registerFont(TTFont("BodyFont-Bold", "fonts/Outfit/Outfit-Bold.ttf"))
-pdfmetrics.registerFont(TTFont("BodyFont-Italic", "fonts/Inter/Inter_18pt-Italic.ttf"))
-pdfmetrics.registerFont(TTFont("BodyFont-BoldItalic", "fonts/Inter/Inter_18pt-BoldItalic.ttf"))
-pdfmetrics.registerFont(TTFont("Body2Font", "fonts/Outfit/Outfit-SemiBold.ttf"))
-pdfmetrics.registerFont(TTFont("HeadingFont","fonts/BiondiSans/biondi-sans-bd.ttf"))
-pdfmetrics.registerFont(TTFont("PageFont", "fonts/BiondiSans/biondi-sans-rg.ttf"))
+pdfmetrics.registerFont(TTFont("TitleFont", os.path.join(BASE_DIR, "fonts", "PoynterOldStyle","PoynterOldstyleText-Roman.ttf")))
+pdfmetrics.registerFont(TTFont("BodyFont", os.path.join(BASE_DIR, "fonts", "Outfit","Outfit-Regular.ttf")))
+pdfmetrics.registerFont(TTFont("BodyFont-Bold", os.path.join(BASE_DIR, "fonts", "Outfit","Outfit-Bold.ttf")))
+pdfmetrics.registerFont(TTFont("BodyFont-Italic", os.path.join(BASE_DIR, "fonts", "Inter","Inter_18pt-Italic.ttf")))
+pdfmetrics.registerFont(TTFont("BodyFont-BoldItalic", os.path.join(BASE_DIR, "fonts", "Inter","Inter_18pt-BoldItalic.ttf")))
+pdfmetrics.registerFont(TTFont("Body2Font", os.path.join(BASE_DIR, "fonts", "Outfit","Outfit-SemiBold.ttf")))
+pdfmetrics.registerFont(TTFont("HeadingFont", os.path.join(BASE_DIR, "fonts", "BiondiSans","biondi-sans-bd.ttf")))
+pdfmetrics.registerFont(TTFont("PageFont", os.path.join(BASE_DIR, "fonts", "BiondiSans","biondi-sans-rg.ttf")))
 
 pdfmetrics.registerFontFamily(
     "BodyFont",
@@ -189,6 +192,9 @@ def white_box_bullet(text, style, text_width):
 # Main Generator
 # ----------------------------
 def generate_pdf(txt_path, title_path, bg_path):
+    
+    bg_path = os.path.join(BASE_DIR, bg_path)
+    buffer = BytesIO()
 
     data = parse_txt_file(txt_path)
     week = data["week"]
@@ -198,7 +204,7 @@ def generate_pdf(txt_path, title_path, bg_path):
 
     pdf_path = f"Devotion AbbaYouth_{period}.pdf"
     doc = SimpleDocTemplate(
-        pdf_path,
+        buffer,
         pagesize=A4,
         leftMargin=2 * cm,
         rightMargin=1.5 * cm,
@@ -348,7 +354,7 @@ def generate_pdf(txt_path, title_path, bg_path):
 
         content_flow = []
         # quest_box =[]
-        question_icon = Image("icons/PP.png", width=10, height=15)
+        question_icon = Image(os.path.join(BASE_DIR, "icons", "PP.png"), width=10, height=15)
         question_table = Table(
             [[(Paragraph("PERTANYAAN PERENUNGAN", HEADING_STYLE)),(question_icon)]],
             colWidths=[doc.width * 0.7, doc.width * 0.3],
@@ -381,7 +387,7 @@ def generate_pdf(txt_path, title_path, bg_path):
 
 
         # CONTEXT
-        context_icon = Image("icons/K.png", width=15.2*1.1, height=16.9*1.1)
+        context_icon = Image(os.path.join(BASE_DIR, "icons", "K.png"), width=15.2*1.1, height=16.9*1.1)
         context_table = Table(
             [[(Paragraph("KONTEKS", HEADING_STYLE)),(context_icon)]],
             colWidths=[doc.width * 0.55, doc.width * 0.45],
@@ -403,7 +409,7 @@ def generate_pdf(txt_path, title_path, bg_path):
         content_flow.append(Spacer(1,6))
 
         # FIRMAN KRISTUS
-        fk_icon = Image("icons/FK.png", width=13.1*1.1, height=15.4*1.1)
+        fk_icon = Image(os.path.join(BASE_DIR, "icons", "FK.png"), width=13.1*1.1, height=15.4*1.1)
         fk_table = Table(
             [[(Paragraph("FIRMAN KRISTUS", HEADING_STYLE)),(fk_icon)]],
             colWidths=[doc.width * 0.6, doc.width * 0.4],
@@ -523,13 +529,16 @@ def generate_pdf(txt_path, title_path, bg_path):
         onLaterPages=lambda canvas, doc: draw_bg(canvas, doc, bg_path)
     )
 
+    buffer.seek(0)
+    return buffer, pdf_path
+
 # ----------------------------
 # Run
 # ----------------------------
-import sys
+# import sys
 
-txt_path = sys.argv[1]
-title_bg = sys.argv[2]
-content_bg = sys.argv[3]
+# txt_path = sys.argv[1]
+# title_bg = sys.argv[2]
+# content_bg = sys.argv[3]
 
-generate_pdf(txt_path, title_bg, content_bg)
+# generate_pdf(txt_path, title_bg, content_bg)
