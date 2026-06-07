@@ -76,6 +76,19 @@ def active_day_index(dev):
     return 0
 
 
+def pick_current(published):
+    """From published devotions (already sorted newest week first), pick the one
+    whose week contains today (WIB); otherwise the most recent week."""
+    today = datetime.now(LOCAL_TZ).date()
+    for dev in published:
+        days = dev["data"]["days"]
+        start = parse_id_date(days[0].get("date")) if days else None
+        end = parse_id_date(days[-1].get("date")) if days else None
+        if start and end and start <= today <= end:
+            return dev
+    return published[0] if published else None
+
+
 app.jinja_env.globals.update(to_local=to_local, is_published=is_published)
 
 
@@ -96,11 +109,12 @@ def asset_font(name):
 # ---------------------------------------------------------------- reader
 @app.route("/")
 def index():
-    dev = db.get_latest_published()
+    published = db.list_published()
+    dev = pick_current(published)
     if not dev:
         return render_template("empty.html")
     return render_template(
-        "reader.html", dev=dev, archive=db.list_published(), is_latest=True,
+        "reader.html", dev=dev, archive=published, is_latest=True,
         active_index=active_day_index(dev),
     )
 

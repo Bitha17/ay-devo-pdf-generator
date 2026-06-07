@@ -10,7 +10,9 @@ their paths plus the parsed devotion JSON so we never re-parse at read time.
 import os
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+
+from content import parse_id_date
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -66,6 +68,17 @@ def _row_to_dict(row):
     return d
 
 
+def week_start(dev):
+    """The devotion's first-day date, used for chronological ordering.
+    Falls back to the publish time so a row never sorts to the very bottom."""
+    days = dev.get("data", {}).get("days") or []
+    if days:
+        d = parse_id_date(days[0].get("date"))
+        if d:
+            return d
+    return datetime.fromisoformat(dev["publish_at"]).date()
+
+
 def upsert_devotion(slug, title, week, month, period, publish_at_utc,
                     parsed, pdf_path, image_path, hero_path):
     """Insert or replace a devotion by slug. publish_at_utc is a tz-aware
@@ -115,22 +128,23 @@ def get_by_slug(slug, include_unpublished=False):
 
 
 def list_published():
+    """Published devotions, newest week first (by the devotion's own date)."""
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM devotions WHERE publish_at <= ? "
-            "ORDER BY publish_at DESC",
-            (_now_iso(),),
+            "SELECT * FROM devotions WHERE publish_at <= ?", (_now_iso(),)
         ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+    devs = [_row_to_dict(r) for r in rows]
+    devs.sort(key=week_start, reverse=True)
+    return devs
 
 
 def list_all():
-    """Admin view: every devotion, published or scheduled."""
+    """Admin view: every devotion, newest week first."""
     with _connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM devotions ORDER BY publish_at DESC"
-        ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+        rows = conn.execute("SELECT * FROM devotions").fetchall()
+    devs = [_row_to_dict(r) for r in rows]
+    devs.sort(key=week_start, reverse=True)
+    return devs
 
 
 def delete_by_slug(slug):
