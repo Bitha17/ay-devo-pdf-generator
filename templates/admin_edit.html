@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Edit · {{ dev.title or dev.slug }}{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Edit devotion</h2>
+  <a class="iconbtn" href="{{ url_for('admin') }}">← Back</a>
+</div>
+<p class="sub" style="color:var(--muted);font-size:13px">
+  <code>/d/{{ dev.slug }}</code> · {{ dev.period }}
+</p>
+
+<form class="formcard" method="post" action="{{ url_for('admin_edit_save', slug=dev.slug) }}"
+      enctype="multipart/form-data">
+
+  <label>Title</label>
+  <input type="text" name="title" value="{{ dev.title or '' }}"
+         style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:14px">
+
+  <label>Publish at (WIB)</label>
+  <input type="datetime-local" name="publish_at" value="{{ publish_local }}">
+
+  <label>Replace devotion text (.txt) — optional</label>
+  <input type="file" name="txt" accept=".txt">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Leave empty to keep the current text. Re-uploading regenerates the PDF.
+  </p>
+
+  <label>Replace PDF cover — optional</label>
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Leave empty to keep the current cover. Replacing regenerates the PDF.
+  </p>
+
+  <label>Web title banner — optional</label>
+  <input type="file" name="web_hero" accept="image/png,image/jpeg">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    {% if dev.hero_path %}
+      A banner is set. Upload to replace it, or
+      <label style="display:inline;font-weight:400">
+        <input type="checkbox" name="remove_hero" style="width:auto"> remove it (use text title)
+      </label>.
+    {% else %}
+      No banner set — the text title is shown. Upload one to use an image (16:9, centered).
+    {% endif %}
+  </p>
+
+  <div class="actions">
+    <button class="btn primary" type="submit">Save changes</button>
+    <a class="btn" href="{{ url_for('devotion', slug=dev.slug) }}" target="_blank">Preview</a>
+  </div>
+</form>
+{% endblock %}

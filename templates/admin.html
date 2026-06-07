@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Admin · AbbaYouth Devotion{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Publish a devotion</h2>
+  <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
+</div>
+
+<form class="formcard" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
+  <label>Devotion text (.txt)</label>
+  <input type="file" name="txt" accept=".txt" required>
+
+  <label>PDF cover image (required)</label>
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg" required>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Used as the PDF's first page.
+  </p>
+
+  <label>Web title banner (optional)</label>
+  <input type="file" name="web_hero" accept="image/png,image/jpeg">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Shown in the web title box, cropped to a 16:9 banner (centered). Leave empty for the text title.
+  </p>
+
+  <label>Publish at (WIB) — leave blank to publish now</label>
+  <input type="datetime-local" name="publish_at">
+
+  <div class="actions"><button class="btn primary" type="submit">Upload &amp; generate</button></div>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    The slug is derived from the week + month (e.g. <code>week-4-jan-2026</code>).
+    Re-uploading the same week overwrites it.
+  </p>
+</form>
+
+<h3 style="margin-top:28px">All devotions</h3>
+{% if not devotions %}
+  <p style="color:var(--muted)">Nothing uploaded yet.</p>
+{% else %}
+<ul class="list">
+  {% for dev in devotions %}
+  <li>
+    <div style="flex:1">
+      <a class="title" href="{{ url_for('devotion', slug=dev.slug) }}">{{ dev.title or dev.period }}</a>
+      <div class="sub">/d/{{ dev.slug }} · publishes {{ to_local(dev.publish_at).strftime('%d %b %Y, %H:%M') }} WIB</div>
+    </div>
+    {% if is_published(dev) %}
+      <span class="badge live">LIVE</span>
+    {% else %}
+      <span class="badge scheduled">SCHEDULED</span>
+    {% endif %}
+    <a class="iconbtn" href="{{ url_for('admin_edit', slug=dev.slug) }}">Edit</a>
+    <a class="iconbtn" href="{{ url_for('devotion', slug=dev.slug) }}" target="_blank">Preview</a>
+    <a class="iconbtn" href="{{ url_for('devotion_pdf', slug=dev.slug) }}" target="_blank">PDF</a>
+    <form method="post" action="{{ url_for('admin_delete', slug=dev.slug) }}"
+          onsubmit="return confirm('Delete {{ dev.slug }}?')">
+      <button class="danger" type="submit">Delete</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}
