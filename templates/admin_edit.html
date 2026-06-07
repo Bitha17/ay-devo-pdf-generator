@@ -20,19 +20,24 @@
   <input type="datetime-local" name="publish_at" value="{{ publish_local }}">
 
   <label>Replace devotion text (.txt) — optional</label>
-  <input type="file" name="txt" accept=".txt">
+  <input type="file" name="txt" accept=".txt"
+         data-preview="txtPreview" data-preview-type="text">
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     Leave empty to keep the current text. Re-uploading regenerates the PDF.
   </p>
+  <pre id="txtPreview" class="filepreview txtpreview" style="display:none"></pre>
 
   <label>Replace PDF cover — optional</label>
-  <input type="file" name="pdf_cover" accept="image/png,image/jpeg">
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg"
+         data-preview="coverPreview" data-preview-type="image">
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     Leave empty to keep the current cover. Replacing regenerates the PDF.
   </p>
+  <img id="coverPreview" class="filepreview imgpreview" style="display:none" alt="">
 
   <label>Web title banner — optional</label>
-  <input type="file" name="web_hero" accept="image/png,image/jpeg">
+  <input type="file" name="web_hero" accept="image/png,image/jpeg"
+         data-preview="heroPreview" data-preview-type="image">
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     {% if dev.hero_path %}
       A banner is set. Upload to replace it, or
@@ -43,10 +48,19 @@
       No banner set — the text title is shown. Upload one to use an image (16:9, centered).
     {% endif %}
   </p>
+  {% if dev.hero_path %}
+  <img class="filepreview heropreview" src="{{ url_for('devotion_hero', slug=dev.slug) }}" alt="current banner">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">↑ current banner</p>
+  {% endif %}
+  <img id="heroPreview" class="filepreview heropreview" style="display:none" alt="">
 
   <div class="actions">
     <button class="btn primary" type="submit">Save changes</button>
     <a class="btn" href="{{ url_for('devotion', slug=dev.slug) }}" target="_blank">Preview</a>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='preview.js') }}"></script>
 {% endblock %}

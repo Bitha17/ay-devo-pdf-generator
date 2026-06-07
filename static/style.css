@@ -328,6 +328,37 @@ input[type="file"], input[type="datetime-local"], input[type="password"] {
   color: var(--text);
   font-size: 14px;
 }
+/* ---- Admin file previews ---- */
+.filepreview { margin-top: 8px; border-radius: 10px; }
+.imgpreview {
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  padding: 6px;
+}
+.heropreview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid var(--border);
+}
+.txtpreview {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px;
+}
+
 .flash {
   background: #1f9d5522;
   color: #1f9d55;

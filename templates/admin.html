@@ -8,19 +8,25 @@
 
 <form class="formcard" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
   <label>Devotion text (.txt)</label>
-  <input type="file" name="txt" accept=".txt" required>
+  <input type="file" name="txt" accept=".txt" required
+         data-preview="txtPreview" data-preview-type="text">
+  <pre id="txtPreview" class="filepreview txtpreview" style="display:none"></pre>
 
   <label>PDF cover image (required)</label>
-  <input type="file" name="pdf_cover" accept="image/png,image/jpeg" required>
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg" required
+         data-preview="coverPreview" data-preview-type="image">
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     Used as the PDF's first page.
   </p>
+  <img id="coverPreview" class="filepreview imgpreview" style="display:none" alt="">
 
   <label>Web title banner (optional)</label>
-  <input type="file" name="web_hero" accept="image/png,image/jpeg">
+  <input type="file" name="web_hero" accept="image/png,image/jpeg"
+         data-preview="heroPreview" data-preview-type="image">
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     Shown in the web title box, cropped to a 16:9 banner (centered). Leave empty for the text title.
   </p>
+  <img id="heroPreview" class="filepreview heropreview" style="display:none" alt="">
 
   <label>Publish at (WIB) — leave blank to publish now</label>
   <input type="datetime-local" name="publish_at">
@@ -59,4 +65,8 @@
   {% endfor %}
 </ul>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='preview.js') }}"></script>
 {% endblock %}
