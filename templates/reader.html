@@ -35,7 +35,7 @@
 {% for day in d.days %}
 <div class="day {% if loop.index0 == active_index %}active{% endif %}" data-day="{{ loop.index0 }}">
   <div class="card">
-    <div class="daymeta">{{ day.date }}{% if day.author %} · {{ day.author }}{% endif %}</div>
+    <div class="daymeta">{{ day.date }}</div>
     <div class="theme">{{ day.theme }}</div>
     {% if day.verse %}<span class="verse">📖 {{ day.verse }}</span>{% endif %}
     {% if day.key_message %}<div class="keymsg">{{ day.key_message }}</div>{% endif %}
