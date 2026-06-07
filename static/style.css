@@ -1,0 +1,339 @@
+/* ---- Brand fonts (served from /assets/fonts) ---- */
+@font-face {
+  font-family: "Poynter";
+  src: url("/assets/fonts/PoynterOldStyle/PoynterOldstyleText-Roman.ttf");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/assets/fonts/Outfit/Outfit-Regular.ttf");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/assets/fonts/Outfit/Outfit-SemiBold.ttf");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/assets/fonts/Outfit/Outfit-Bold.ttf");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Biondi";
+  src: url("/assets/fonts/BiondiSans/biondi-sans-bd.ttf");
+  font-display: swap;
+}
+
+/* ---- Theme tokens ---- */
+:root {
+  color-scheme: light;
+  --accent: #204170;
+  --accent-soft: #3a64a0;
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --text: #1c2430;
+  --muted: #5c6678;
+  --border: #e3e8f0;
+  --shadow: 0 6px 24px rgba(20, 40, 80, 0.10);
+  --radius: 16px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent: #8fb4ec;
+  --accent-soft: #6f97d6;
+  --bg: #0f141c;
+  --surface: #18202c;
+  --text: #e8edf5;
+  --muted: #9aa6ba;
+  --border: #283344;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Outfit", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---- Top bar ---- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .brand {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 15px;
+  margin-right: auto;
+}
+.iconbtn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.iconbtn:active { transform: scale(0.97); }
+
+.wrap {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ---- Hero ---- */
+.hero {
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 28px 22px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  background-image: linear-gradient(160deg, var(--accent), var(--accent-soft));
+}
+.hero .period { font-size: 13px; opacity: 0.9; letter-spacing: 0.04em; }
+.hero h1 {
+  font-family: "Poynter", serif;
+  font-weight: 400;
+  font-size: 28px;
+  margin: 10px 0 0;
+}
+.hero .week { margin-top: 8px; font-size: 13px; opacity: 0.85; }
+
+/* Cover image hero: crop to a consistent box, anchored center. */
+.heroimg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: center;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.previewnote { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+/* ---- Web / PDF view toggle ---- */
+.viewtoggle {
+  display: flex;
+  gap: 4px;
+  margin: 16px auto 0;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  width: fit-content;
+}
+.viewtoggle button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.viewtoggle button.active { background: var(--accent); color: #fff; }
+
+/* ---- Embedded PDF (rendered by PDF.js) ---- */
+.pdfpages { margin-top: 16px; }
+.pdfpage {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  background: #fff;
+}
+.pdffallback { text-align: center; color: var(--muted); font-size: 13px; margin-top: 10px; }
+.pdffallback a { color: var(--accent); }
+
+/* ---- Day navigation (tabs) ---- */
+.daynav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 16px 0 4px;
+  scrollbar-width: none;
+}
+.daynav::-webkit-scrollbar { display: none; }
+.daynav button {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.daynav button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ---- Day card ---- */
+.day { display: none; }
+.day.active { display: block; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-top: 14px;
+  box-shadow: var(--shadow);
+}
+.daymeta { color: var(--muted); font-size: 13px; }
+.theme {
+  font-family: "Poynter", serif;
+  font-size: 22px;
+  margin: 6px 0 2px;
+}
+.verse {
+  display: inline-block;
+  margin-top: 6px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.keymsg {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 8px;
+  font-weight: 600;
+}
+.m1 { margin-top: 12px; font-size: 14px; color: var(--muted); font-style: italic; }
+
+.section { margin-top: 20px; }
+.section h3 {
+  font-family: "Biondi", sans-serif;
+  color: var(--accent);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.section h3 img { width: 16px; height: auto; }
+.section p { margin: 0 0 10px; }
+.section ol { margin: 0; padding-left: 1.3em; }
+.section ol li { margin-bottom: 6px; }
+
+.reflect {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px dashed var(--accent-soft);
+  border-radius: 12px;
+}
+.reflect .label {
+  font-family: "Biondi", sans-serif;
+  font-size: 13px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ---- Footer actions ---- */
+.actions {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0 8px;
+  flex-wrap: wrap;
+}
+.btn {
+  flex: 1;
+  text-align: center;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--accent);
+  background: var(--surface);
+}
+.btn.primary { background: var(--accent); color: #fff; }
+
+.foot { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 0; }
+
+/* ---- Archive / admin lists ---- */
+.list { list-style: none; padding: 0; margin: 16px 0; }
+.list li {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.list li a.title { font-weight: 600; color: var(--text); text-decoration: none; flex: 1; }
+.list li .sub { color: var(--muted); font-size: 12px; }
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.badge.live { background: #1f9d5522; color: #1f9d55; }
+.badge.scheduled { background: #d9822b22; color: #d9822b; }
+
+/* ---- Forms (admin) ---- */
+.formcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 16px;
+  box-shadow: var(--shadow);
+}
+label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
+input[type="file"], input[type="datetime-local"], input[type="password"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+.flash {
+  background: #1f9d5522;
+  color: #1f9d55;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+.danger { color: #d9534f; background: none; border: none; cursor: pointer; font-size: 13px; }

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% set d = dev.data %}
+{% block title %}{{ dev.title or dev.period }} · AbbaYouth{% endblock %}
+
+{% block content %}
+{% if dev.hero_path %}
+<div>
+  <img class="heroimg" src="{{ url_for('devotion_hero', slug=dev.slug) }}"
+       alt="{{ dev.title or dev.period }}">
+  {% if not is_published(dev) %}<div class="previewnote">⏳ Preview — not yet published</div>{% endif %}
+</div>
+{% else %}
+<div class="hero">
+  <div class="period">{{ dev.period }}</div>
+  <h1>{{ dev.title or d.days[0].theme }}</h1>
+  <div class="week">{{ dev.week }} · {{ dev.month }}</div>
+  {% if not is_published(dev) %}<div class="week">⏳ Preview — not yet published</div>{% endif %}
+</div>
+{% endif %}
+
+<div class="viewtoggle" id="viewtoggle">
+  <button data-view="web" class="active">📖 Web</button>
+  <button data-view="pdf">📄 PDF</button>
+</div>
+
+<div id="webview">
+<div class="daynav" id="daynav">
+  {% for day in d.days %}
+    <button data-day="{{ loop.index0 }}" class="{% if loop.index0 == active_index %}active{% endif %}">
+      {{ day.date.split(',')[0] }}
+    </button>
+  {% endfor %}
+</div>
+
+{% for day in d.days %}
+<div class="day {% if loop.index0 == active_index %}active{% endif %}" data-day="{{ loop.index0 }}">
+  <div class="card">
+    <div class="daymeta">{{ day.date }}{% if day.author %} · {{ day.author }}{% endif %}</div>
+    <div class="theme">{{ day.theme }}</div>
+    {% if day.verse %}<span class="verse">📖 {{ day.verse }}</span>{% endif %}
+    {% if day.key_message %}<div class="keymsg">{{ day.key_message }}</div>{% endif %}
+    {% if day.m1 %}<div class="m1">{{ day.m1 }}</div>{% endif %}
+
+    {% if day.questions %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='PP.png') }}" alt="">Pertanyaan Perenungan</h3>
+      <ol>{% for q in day.questions %}<li>{{ q }}</li>{% endfor %}</ol>
+    </div>
+    {% endif %}
+
+    {% if day.context %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='K.png') }}" alt="">Konteks</h3>
+      {% for para in day.context.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if day.firman_kristus %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='FK.png') }}" alt="">Firman Kristus</h3>
+      {% for para in day.firman_kristus.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if day.aplikasi %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='AP.png') }}" alt="">Aplikasi</h3>
+      <ol>{% for a in day.aplikasi %}<li>{{ a }}</li>{% endfor %}</ol>
+    </div>
+    {% endif %}
+
+    {% if day.m3 %}
+    <div class="reflect">
+      <div class="label">Responsku (M3)</div>
+      <p>{{ day.m3 }}</p>
+    </div>
+    {% endif %}
+    {% if day.m4 %}
+    <div class="reflect">
+      <div class="label">Langkah (M4)</div>
+      {% for line in day.m4.split('\n') if line.strip() %}<p>✦ {{ line.strip() }}</p>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="actions">
+  <a class="btn" href="{{ url_for('archive') }}">🗂 Past weeks</a>
+</div>
+</div><!-- /webview -->
+
+<div id="pdfview" hidden>
+  <div id="pdfpages" class="pdfpages"></div>
+  <p class="pdffallback">
+    PDF not loading?
+    <a href="{{ url_for('devotion_pdf', slug=dev.slug) }}" target="_blank">Open it in a new tab</a>.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  var nav = document.getElementById("daynav");
+  var days = document.querySelectorAll(".day");
+
+  // Center today's chip in the horizontal day bar (no vertical page jump).
+  var activeBtn = nav.querySelector("button.active");
+  if (activeBtn) {
+    nav.scrollLeft = activeBtn.offsetLeft - (nav.clientWidth - activeBtn.clientWidth) / 2;
+  }
+
+  nav.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    var i = btn.dataset.day;
+    nav.querySelectorAll("button").forEach(function (b) { b.classList.toggle("active", b === btn); });
+    days.forEach(function (day) { day.classList.toggle("active", day.dataset.day === i); });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  // Web / PDF view toggle — render the PDF in place (PDF.js) instead of a new tab.
+  var vt = document.getElementById("viewtoggle");
+  var webview = document.getElementById("webview");
+  var pdfview = document.getElementById("pdfview");
+  var pdfpages = document.getElementById("pdfpages");
+  var pdfUrl = "{{ url_for('devotion_pdf', slug=dev.slug) }}";
+  var pdfLoaded = false;
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  function renderPage(pdf, num, canvas, cssWidth) {
+    pdf.getPage(num).then(function (page) {
+      var dpr = window.devicePixelRatio || 1;
+      var base = page.getViewport({ scale: 1 });
+      var vp = page.getViewport({ scale: (cssWidth / base.width) * dpr });
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      canvas.style.width = "100%";
+      page.render({ canvasContext: canvas.getContext("2d"), viewport: vp });
+    });
+  }
+
+  function renderPdf() {
+    if (pdfLoaded) return;
+    pdfLoaded = true;
+    var cssWidth = pdfpages.clientWidth || pdfview.clientWidth || window.innerWidth - 32;
+    pdfjsLib.getDocument(pdfUrl).promise.then(function (pdf) {
+      for (var n = 1; n <= pdf.numPages; n++) {
+        var canvas = document.createElement("canvas");
+        canvas.className = "pdfpage";
+        pdfpages.appendChild(canvas);  // append in order, render async into it
+        renderPage(pdf, n, canvas, cssWidth);
+      }
+    }).catch(function () {
+      pdfLoaded = false;  // allow a retry
+      pdfpages.innerHTML =
+        '<p class="pdffallback">Couldn’t render the PDF here — use the link below.</p>';
+    });
+  }
+
+  vt.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    var pdf = btn.dataset.view === "pdf";
+    vt.querySelectorAll("button").forEach(function (b) { b.classList.toggle("active", b === btn); });
+    webview.hidden = pdf;
+    pdfview.hidden = !pdf;
+    if (pdf) renderPdf();  // render after unhiding so clientWidth is correct
+    window.scrollTo({ top: 0 });
+  });
+</script>
+{% endblock %}

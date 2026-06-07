@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Archive · AbbaYouth Devotion{% endblock %}
+{% block content %}
+<h2 style="font-family:'Poynter',serif;font-weight:400;">Past devotions</h2>
+{% if not archive %}
+  <p style="color:var(--muted)">No devotions published yet.</p>
+{% else %}
+<ul class="list">
+  {% for dev in archive %}
+  <li>
+    <div style="flex:1">
+      <a class="title" href="{{ url_for('devotion', slug=dev.slug) }}">{{ dev.title or dev.period }}</a>
+      <div class="sub">{{ dev.period }} · {{ dev.week }}</div>
+    </div>
+    <a class="iconbtn" href="{{ url_for('devotion_pdf', slug=dev.slug) }}" target="_blank">PDF</a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+<div class="actions"><a class="btn primary" href="{{ url_for('index') }}">← Latest devotion</a></div>
+{% endblock %}
