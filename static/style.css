@@ -319,7 +319,7 @@ body {
   box-shadow: var(--shadow);
 }
 label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
-input[type="file"], input[type="datetime-local"], input[type="password"] {
+input[type="text"], input[type="file"], input[type="datetime-local"], input[type="password"] {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -358,6 +358,19 @@ input[type="file"], input[type="datetime-local"], input[type="password"] {
   border: 1px solid var(--border);
   padding: 10px;
 }
+
+/* ---- "Show password" checkbox ---- */
+.pwshow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pwshow input { width: auto; }
 
 .flash {
   background: #1f9d5522;
