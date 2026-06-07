@@ -192,11 +192,15 @@ def white_box_bullet(text, style, text_width):
 # Main Generator
 # ----------------------------
 def generate_pdf(txt_path, title_path, bg_path):
-    
+    """Parse a .txt and render it. Thin wrapper around generate_pdf_from_data."""
+    return generate_pdf_from_data(parse_txt_file(txt_path), title_path, bg_path)
+
+
+def generate_pdf_from_data(data, title_path, bg_path):
+
     bg_path = os.path.join(BASE_DIR, bg_path)
     buffer = BytesIO()
 
-    data = parse_txt_file(txt_path)
     week = data["week"]
     month = data["month"]
     period = data["period"]
