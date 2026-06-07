@@ -192,8 +192,11 @@ def admin_upload():
     parsed = parse_txt_file(txt_path)
     slug = make_slug(parsed["week"], parsed["month"])
 
-    with open(txt_path, encoding="utf-8-sig") as f:
-        title = extract_title(f.read())
+    # Title: use the admin's override if given, else derive it from the text.
+    title = request.form.get("title", "").strip()
+    if not title:
+        with open(txt_path, encoding="utf-8-sig") as f:
+            title = extract_title(f.read())
 
     # PDF cover (mandatory) — the PDF's first-page background.
     image_path = None

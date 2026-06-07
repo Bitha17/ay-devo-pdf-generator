@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set d = dev.data %}
-{% block title %}{{ dev.title or dev.period }} · AbbaYouth{% endblock %}
+{% block title %}AbbaYouth Devotion | {{ dev.title or dev.period }}{% endblock %}
 
 {% block content %}
 {% if dev.hero_path %}
