@@ -180,6 +180,7 @@ body {
   font-size: 14px;
   text-align: center;
 }
+.pdfloading[hidden] { display: none; }  /* let the hidden attribute win over display:flex */
 .spinner {
   width: 18px;
   height: 18px;
