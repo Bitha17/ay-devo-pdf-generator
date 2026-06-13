@@ -74,7 +74,7 @@
 <form class="formcard" method="post" action="{{ url_for('admin_background') }}" enctype="multipart/form-data">
   <p class="sub" style="color:var(--muted);font-size:13px;margin-top:0">
     Background used on every devotion's content pages (after the cover). Changing it
-    re-renders <strong>all</strong> existing PDFs to match.
+    affects <strong>future</strong> PDFs only — existing PDFs are kept as they are.
   </p>
   <label>Current background</label>
   <img class="filepreview imgpreview" src="{{ url_for('admin_background_current') }}" alt="current background">
@@ -84,7 +84,18 @@
          data-preview="bgPreview" data-preview-type="image">
   <img id="bgPreview" class="filepreview imgpreview" style="display:none" alt="">
 
-  <div class="actions"><button class="btn primary" type="submit">Update background &amp; regenerate PDFs</button></div>
+  <div class="actions"><button class="btn primary" type="submit">Update background</button></div>
+
+  <p class="sub" style="color:var(--muted);font-size:13px;margin:18px 0 0;border-top:1px solid var(--border);padding-top:14px">
+    Optional: re-render every existing PDF with the current background.
+  </p>
+  <div class="actions">
+    <button class="btn" type="submit" formaction="{{ url_for('admin_regenerate') }}"
+            formnovalidate
+            onclick="return confirm('Regenerate ALL existing PDFs with the current background? This overwrites them.')">
+      Regenerate all PDFs
+    </button>
+  </div>
 </form>
 {% endblock %}
 

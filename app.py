@@ -361,14 +361,23 @@ def admin_download(slug):
 @app.route("/admin/background", methods=["POST"])
 @require_admin
 def admin_background():
-    """Replace the content-page background and re-render every PDF with it."""
+    """Replace the content-page background. Affects FUTURE PDFs only; existing
+    PDFs are kept as they are (use /admin/regenerate to update them)."""
     bg = request.files.get("bg")
     if not bg or not bg.filename:
         flash("No background image selected.")
         return redirect(url_for("admin"))
     bg.save(ACTIVE_BG)
+    flash("Background updated — new PDFs will use it. Existing PDFs are unchanged.")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/regenerate", methods=["POST"])
+@require_admin
+def admin_regenerate():
+    """Re-render every existing PDF with the current background (opt-in)."""
     n = regenerate_all_pdfs()
-    flash(f"Background updated; regenerated {n} PDF(s).")
+    flash(f"Regenerated {n} PDF(s) with the current background.")
     return redirect(url_for("admin"))
 
 
