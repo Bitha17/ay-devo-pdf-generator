@@ -8,11 +8,10 @@
 <ul class="list">
   {% for dev in archive %}
   <li>
-    <div style="flex:1">
-      <a class="title" href="{{ url_for('devotion', slug=dev.slug) }}">{{ dev.title or dev.period }}</a>
-      <div class="sub">{{ dev.period }} · {{ dev.week }}</div>
-    </div>
-    <a class="iconbtn" href="{{ url_for('devotion_pdf', slug=dev.slug) }}" target="_blank">PDF</a>
+    <a class="title" href="{{ url_for('devotion', slug=dev.slug) }}" style="flex:1">
+      {{ dev.title or dev.period }}
+      <span class="sub" style="display:block">{{ dev.period }} · {{ dev.week }}</span>
+    </a>
   </li>
   {% endfor %}
 </ul>
