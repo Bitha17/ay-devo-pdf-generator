@@ -91,6 +91,10 @@
 </div><!-- /webview -->
 
 <div id="pdfview" hidden>
+  <div id="pdfLoading" class="pdfloading" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    Loading preview… please wait.
+  </div>
   <div id="pdfpages" class="pdfpages"></div>
   <p class="pdffallback">
     PDF not loading?
@@ -125,6 +129,7 @@
   var webview = document.getElementById("webview");
   var pdfview = document.getElementById("pdfview");
   var pdfpages = document.getElementById("pdfpages");
+  var pdfLoading = document.getElementById("pdfLoading");
   var pdfUrl = "{{ url_for('devotion_pdf', slug=dev.slug) }}";
   var pdfLoaded = false;
 
@@ -132,30 +137,36 @@
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   function renderPage(pdf, num, canvas, cssWidth) {
-    pdf.getPage(num).then(function (page) {
+    return pdf.getPage(num).then(function (page) {
       var dpr = window.devicePixelRatio || 1;
       var base = page.getViewport({ scale: 1 });
       var vp = page.getViewport({ scale: (cssWidth / base.width) * dpr });
       canvas.width = vp.width;
       canvas.height = vp.height;
       canvas.style.width = "100%";
-      page.render({ canvasContext: canvas.getContext("2d"), viewport: vp });
+      return page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
     });
   }
 
   function renderPdf() {
     if (pdfLoaded) return;
     pdfLoaded = true;
+    pdfLoading.hidden = false;  // show "Loading preview…" while it fetches + renders
     var cssWidth = pdfpages.clientWidth || pdfview.clientWidth || window.innerWidth - 32;
     pdfjsLib.getDocument(pdfUrl).promise.then(function (pdf) {
+      var first = null;
       for (var n = 1; n <= pdf.numPages; n++) {
         var canvas = document.createElement("canvas");
         canvas.className = "pdfpage";
         pdfpages.appendChild(canvas);  // append in order, render async into it
-        renderPage(pdf, n, canvas, cssWidth);
+        var p = renderPage(pdf, n, canvas, cssWidth);
+        if (n === 1) first = p;
       }
+      // Hide the message once the first page is actually painted.
+      (first || Promise.resolve()).then(function () { pdfLoading.hidden = true; });
     }).catch(function () {
-      pdfLoaded = false;  // allow a retry
+      pdfLoaded = false;       // allow a retry
+      pdfLoading.hidden = true;
       pdfpages.innerHTML =
         '<p class="pdffallback">Couldn’t render the PDF here — use the link below.</p>';
     });

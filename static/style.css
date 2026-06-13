@@ -169,6 +169,27 @@ body {
   box-shadow: var(--shadow);
   background: #fff;
 }
+.pdfloading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 28px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .pdffallback { text-align: center; color: var(--muted); font-size: 13px; margin-top: 10px; }
 .pdffallback a { color: var(--accent); }
 
