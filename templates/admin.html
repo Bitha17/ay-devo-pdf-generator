@@ -60,6 +60,7 @@
     <a class="iconbtn" href="{{ url_for('admin_edit', slug=dev.slug) }}">Edit</a>
     <a class="iconbtn" href="{{ url_for('devotion', slug=dev.slug) }}" target="_blank">Preview</a>
     <a class="iconbtn" href="{{ url_for('devotion_pdf', slug=dev.slug) }}" target="_blank">PDF</a>
+    <a class="iconbtn" href="{{ url_for('admin_download', slug=dev.slug) }}">Download</a>
     <form method="post" action="{{ url_for('admin_delete', slug=dev.slug) }}"
           onsubmit="return confirm('Delete {{ dev.slug }}?')">
       <button class="danger" type="submit">Delete</button>
@@ -68,6 +69,23 @@
   {% endfor %}
 </ul>
 {% endif %}
+
+<h3 style="margin-top:28px">Content-page background</h3>
+<form class="formcard" method="post" action="{{ url_for('admin_background') }}" enctype="multipart/form-data">
+  <p class="sub" style="color:var(--muted);font-size:13px;margin-top:0">
+    Background used on every devotion's content pages (after the cover). Changing it
+    re-renders <strong>all</strong> existing PDFs to match.
+  </p>
+  <label>Current background</label>
+  <img class="filepreview imgpreview" src="{{ url_for('admin_background_current') }}" alt="current background">
+
+  <label>Replace background</label>
+  <input type="file" name="bg" accept="image/png,image/jpeg" required
+         data-preview="bgPreview" data-preview-type="image">
+  <img id="bgPreview" class="filepreview imgpreview" style="display:none" alt="">
+
+  <div class="actions"><button class="btn primary" type="submit">Update background &amp; regenerate PDFs</button></div>
+</form>
 {% endblock %}
 
 {% block scripts %}

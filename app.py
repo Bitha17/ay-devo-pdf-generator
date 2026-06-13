@@ -37,7 +37,8 @@ app.secret_key = SECRET_KEY
 # Publish times are entered in this timezone, stored/compared in UTC.
 LOCAL_TZ = ZoneInfo(os.environ.get("DEVO_TZ", "Asia/Jakarta"))
 
-FIXED_BG = "static/bg.png"  # later-pages background, resolved inside pdf.py
+FIXED_BG = "static/bg.png"            # bundled default later-pages background
+ACTIVE_BG = os.path.join(db.DATA_DIR, "bg.png")  # admin-uploaded override (persisted)
 
 
 # ---------------------------------------------------------------- helpers
@@ -61,6 +62,26 @@ def _delete_file(path):
             os.remove(path)
         except OSError:
             pass
+
+
+def current_bg_path():
+    """Active content-page background: the admin-uploaded one if present, else
+    the bundled default. Always returns an absolute path."""
+    return ACTIVE_BG if os.path.exists(ACTIVE_BG) else os.path.join(BASE_DIR, FIXED_BG)
+
+
+def regenerate_all_pdfs():
+    """Re-render every devotion's PDF with the current background. Returns count."""
+    bg = current_bg_path()
+    count = 0
+    for dev in db.list_all():
+        cover = dev["image_path"] or os.path.join(BASE_DIR, FIXED_BG)
+        pdf_path = dev["pdf_path"] or os.path.join(db.PDF_DIR, f"{dev['slug']}.pdf")
+        buffer, _ = generate_pdf_from_data(dev["data"], cover, bg)
+        with open(pdf_path, "wb") as f:
+            f.write(buffer.getvalue())
+        count += 1
+    return count
 
 
 def is_published(dev):
@@ -212,7 +233,7 @@ def admin_upload():
         web_hero.save(hero_path)
 
     # Generate the PDF once, at publish time, and store it on disk.
-    pdf_buffer, pdf_name = generate_pdf(txt_path, cover_for_pdf, FIXED_BG)
+    pdf_buffer, pdf_name = generate_pdf(txt_path, cover_for_pdf, current_bg_path())
     pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
     with open(pdf_path, "wb") as f:
         f.write(pdf_buffer.getvalue())
@@ -303,7 +324,7 @@ def admin_edit_save(slug):
     pdf_path = dev["pdf_path"] or os.path.join(db.PDF_DIR, f"{slug}.pdf")
     if regen_pdf:
         cover_for_pdf = image_path or os.path.join(BASE_DIR, FIXED_BG)
-        buffer, _ = generate_pdf_from_data(parsed, cover_for_pdf, FIXED_BG)
+        buffer, _ = generate_pdf_from_data(parsed, cover_for_pdf, current_bg_path())
         with open(pdf_path, "wb") as f:
             f.write(buffer.getvalue())
 
@@ -322,6 +343,39 @@ def admin_delete(slug):
     db.delete_by_slug(slug)
     flash(f"Deleted {slug}.")
     return redirect(url_for("admin"))
+
+
+@app.route("/admin/download/<slug>")
+@require_admin
+def admin_download(slug):
+    """Download the PDF with the proper 'Devotion AbbaYouth_<period>.pdf' name."""
+    dev = db.get_by_slug(slug, include_unpublished=True)
+    if not dev or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
+        abort(404)
+    return send_file(
+        dev["pdf_path"], mimetype="application/pdf", as_attachment=True,
+        download_name=f"Devotion AbbaYouth_{dev['period']}.pdf",
+    )
+
+
+@app.route("/admin/background", methods=["POST"])
+@require_admin
+def admin_background():
+    """Replace the content-page background and re-render every PDF with it."""
+    bg = request.files.get("bg")
+    if not bg or not bg.filename:
+        flash("No background image selected.")
+        return redirect(url_for("admin"))
+    bg.save(ACTIVE_BG)
+    n = regenerate_all_pdfs()
+    flash(f"Background updated; regenerated {n} PDF(s).")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/background/current")
+@require_admin
+def admin_background_current():
+    return send_file(current_bg_path())
 
 
 if __name__ == "__main__":
