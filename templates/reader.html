@@ -37,7 +37,8 @@
   <div class="card">
     <div class="daymeta">{{ day.date }}</div>
     <div class="theme">{{ day.theme }}</div>
-    {% if day.verse %}<span class="verse">📖 {{ day.verse }}</span>{% endif %}
+    {% if day.verse %}<button type="button" class="verse versebtn" data-ref="{{ day.verse }}"
+        title="Ketuk untuk baca ayat">📖 {{ day.verse }}</button>{% endif %}
     {% if day.key_message %}<div class="keymsg">{{ day.key_message }}</div>{% endif %}
     {% if day.m1 %}<div class="m1">{{ day.m1 }}</div>{% endif %}
 
@@ -90,6 +91,17 @@
 </div>
 </div><!-- /webview -->
 
+<div id="verseSheet" class="versesheet" hidden>
+  <div class="versesheet-backdrop" data-close></div>
+  <div class="versesheet-panel">
+    <div class="versesheet-head">
+      <strong id="verseTitle"></strong>
+      <button type="button" class="versesheet-close" data-close aria-label="Tutup">✕</button>
+    </div>
+    <div id="verseBody" class="versesheet-body"></div>
+  </div>
+</div>
+
 <div id="pdfview" hidden>
   <div id="pdfLoading" class="pdfloading" hidden>
     <span class="spinner" aria-hidden="true"></span>
@@ -104,6 +116,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='bible.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
   var nav = document.getElementById("daynav");

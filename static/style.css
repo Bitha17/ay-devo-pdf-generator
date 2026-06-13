@@ -245,6 +245,94 @@ body {
   font-weight: 600;
   color: var(--accent);
 }
+.versebtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+/* ---- Verse bottom sheet ---- */
+.versesheet[hidden] { display: none; }
+.versesheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.versesheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+.versesheet-panel {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow);
+  padding: 18px 18px 28px;
+  animation: sheetup 0.22s ease;
+}
+@keyframes sheetup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.versesheet-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  padding-bottom: 10px;
+}
+.versesheet-head strong {
+  flex: 1;
+  font-family: "Poynter", serif;
+  color: var(--accent);
+  font-size: 18px;
+}
+.versesheet-close {
+  border: none;
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.versesheet-body { font-size: 15px; line-height: 1.7; }
+.versref {
+  font-family: "Biondi", sans-serif;
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 14px 0 6px;
+}
+.verstext { margin: 0; }
+.verstext sup { color: var(--accent); font-weight: 700; font-size: 0.7em; margin-right: 2px; }
+.verserr { color: var(--muted); font-size: 14px; }
+.versloading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  padding: 24px 0;
+}
+.versver {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+body.sheet-open { overflow: hidden; }
 .keymsg {
   margin-top: 12px;
   padding: 12px 14px;
