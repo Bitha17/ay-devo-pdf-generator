@@ -240,6 +240,7 @@ body {
   font-family: "Poynter", serif;
   font-size: 22px;
   margin: 6px 0 2px;
+  text-transform: uppercase;
 }
 .verse {
   display: inline-block;
