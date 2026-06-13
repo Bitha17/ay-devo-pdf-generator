@@ -81,6 +81,7 @@ body {
   color: var(--accent);
   font-size: 15px;
   margin-right: auto;
+  text-decoration: none;
 }
 .iconbtn {
   border: 1px solid var(--border);
