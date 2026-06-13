@@ -54,7 +54,7 @@
   <img id="heroPreview" class="filepreview heropreview" style="display:none" alt="">
 
   <div class="actions">
-    <button class="btn primary" type="submit">Save changes</button>
+    <button class="btn primary" type="submit" data-busy="Menyimpan perubahan…">Save changes</button>
     <a class="btn" href="{{ url_for('devotion', slug=dev.slug) }}" target="_blank">Preview</a>
   </div>
 </form>
@@ -62,4 +62,5 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='preview.js') }}"></script>
+<script src="{{ url_for('static', filename='admin.js') }}"></script>
 {% endblock %}

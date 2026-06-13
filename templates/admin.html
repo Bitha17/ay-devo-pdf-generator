@@ -34,7 +34,7 @@
   <label>Publish at (WIB) — leave blank to publish now</label>
   <input type="datetime-local" name="publish_at">
 
-  <div class="actions"><button class="btn primary" type="submit">Upload &amp; generate</button></div>
+  <div class="actions"><button class="btn primary" type="submit" data-busy="Mengunggah &amp; membuat PDF…">Upload &amp; generate</button></div>
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     The slug is derived from the week + month (e.g. <code>week-4-jan-2026</code>).
     Re-uploading the same week overwrites it.
@@ -63,7 +63,7 @@
     <a class="iconbtn" href="{{ url_for('admin_download', slug=dev.slug) }}">Download</a>
     <form method="post" action="{{ url_for('admin_delete', slug=dev.slug) }}"
           onsubmit="return confirm('Delete {{ dev.slug }}?')">
-      <button class="danger" type="submit">Delete</button>
+      <button class="danger" type="submit" data-busy="Menghapus…">Delete</button>
     </form>
   </li>
   {% endfor %}
@@ -84,14 +84,14 @@
          data-preview="bgPreview" data-preview-type="image">
   <img id="bgPreview" class="filepreview imgpreview" style="display:none" alt="">
 
-  <div class="actions"><button class="btn primary" type="submit">Update background</button></div>
+  <div class="actions"><button class="btn primary" type="submit" data-busy="Memperbarui latar…">Update background</button></div>
 
   <p class="sub" style="color:var(--muted);font-size:13px;margin:18px 0 0;border-top:1px solid var(--border);padding-top:14px">
     Optional: re-render every existing PDF with the current background.
   </p>
   <div class="actions">
     <button class="btn" type="submit" formaction="{{ url_for('admin_regenerate') }}"
-            formnovalidate
+            formnovalidate data-busy="Membuat ulang semua PDF…"
             onclick="return confirm('Regenerate ALL existing PDFs with the current background? This overwrites them.')">
       Regenerate all PDFs
     </button>
@@ -101,4 +101,5 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='preview.js') }}"></script>
+<script src="{{ url_for('static', filename='admin.js') }}"></script>
 {% endblock %}

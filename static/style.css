@@ -483,6 +483,30 @@ input[type="text"], input[type="file"], input[type="datetime-local"], input[type
 }
 .pwshow input { width: auto; }
 
+/* ---- Admin "processing" overlay ---- */
+.busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.busy-overlay[hidden] { display: none; }
+.busy-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 18px 24px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .flash {
   background: #1f9d5522;
   color: #1f9d55;
