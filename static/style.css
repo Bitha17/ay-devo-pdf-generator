@@ -119,6 +119,7 @@ body {
   font-weight: 400;
   font-size: 28px;
   margin: 10px 0 0;
+  text-transform: uppercase;
 }
 .hero .week { margin-top: 8px; font-size: 13px; opacity: 0.85; }
 
@@ -408,8 +409,8 @@ body.sheet-open { overflow: hidden; }
   align-items: center;
   gap: 12px;
 }
-.list li a.title { font-weight: 600; color: var(--text); text-decoration: none; flex: 1; }
-.list li .sub { color: var(--muted); font-size: 12px; }
+.list li a.title { font-weight: 600; color: var(--text); text-decoration: none; flex: 1; text-transform: uppercase; }
+.list li .sub { color: var(--muted); font-size: 12px; text-transform: none; }
 .badge {
   font-size: 11px;
   font-weight: 700;
