@@ -7,31 +7,24 @@
 (function () {
   "use strict";
 
-  var API = "https://api.prayerpulse.io/bible/get-chapter/TB/";
+  var API = "https://bible.sonnylab.com/";  // GraphQL, single ACAO header (browser-safe)
 
-  // Indonesian book name -> canonical book number (1-66). Prayer Pulse resolves
-  // single-word names but not numbered/multi-word ones, so we map to numbers.
-  var BOOKS = {
-    "kejadian": 1, "keluaran": 2, "imamat": 3, "bilangan": 4, "ulangan": 5,
-    "yosua": 6, "hakim-hakim": 7, "hakim hakim": 7, "rut": 8,
-    "1 samuel": 9, "2 samuel": 10, "1 raja-raja": 11, "2 raja-raja": 12,
-    "1 tawarikh": 13, "2 tawarikh": 14, "ezra": 15, "nehemia": 16, "ester": 17,
-    "ayub": 18, "mazmur": 19, "amsal": 20, "pengkhotbah": 21, "kidung agung": 22,
-    "yesaya": 23, "yeremia": 24, "ratapan": 25, "yehezkiel": 26, "daniel": 27,
-    "hosea": 28, "yoel": 29, "amos": 30, "obaja": 31, "yunus": 32, "mikha": 33,
-    "nahum": 34, "habakuk": 35, "zefanya": 36, "hagai": 37, "zakharia": 38,
-    "maleakhi": 39, "matius": 40, "markus": 41, "lukas": 42, "yohanes": 43,
-    "kisah para rasul": 44, "kisah rasul": 44, "roma": 45, "1 korintus": 46,
-    "2 korintus": 47, "galatia": 48, "efesus": 49, "filipi": 50, "kolose": 51,
-    "1 tesalonika": 52, "2 tesalonika": 53, "1 timotius": 54, "2 timotius": 55,
-    "titus": 56, "filemon": 57, "ibrani": 58, "yakobus": 59, "1 petrus": 60,
-    "2 petrus": 61, "1 yohanes": 62, "2 yohanes": 63, "3 yohanes": 64,
-    "yudas": 65, "wahyu": 66
+  // sonnylab accepts full Indonesian names for most books, but numbered and a
+  // couple of multi-word books need a SABDA-style token. Only the exceptions are
+  // mapped; everything else passes through by name.
+  var BOOK_TOKEN = {
+    "1 samuel": "1Sam", "2 samuel": "2Sam", "1 raja-raja": "1Raj",
+    "2 raja-raja": "2Raj", "1 tawarikh": "1Taw", "2 tawarikh": "2Taw",
+    "kidung agung": "Kid", "kisah para rasul": "Kis", "kisah rasul": "Kis",
+    "1 korintus": "1Kor", "2 korintus": "2Kor", "1 tesalonika": "1Tes",
+    "2 tesalonika": "2Tes", "1 timotius": "1Tim", "2 timotius": "2Tim",
+    "1 petrus": "1Ptr", "2 petrus": "2Ptr", "1 yohanes": "1Yoh",
+    "2 yohanes": "2Yoh", "3 yohanes": "3Yoh"
   };
 
   function bookToken(name) {
     var key = name.toLowerCase().replace(/\s+/g, " ").trim();
-    return BOOKS[key] || encodeURIComponent(name.trim());  // fall back to the name
+    return BOOK_TOKEN[key] || name.trim();
   }
 
   // A verse spec like "21-28", "3,5,7" or "1-2,5" -> [21,22,...] / [3,5,7].
@@ -75,14 +68,22 @@
   }
 
   function fetchPassage(ref) {
-    var url = API + bookToken(ref.book) + "/" + ref.chapter + "/";
     var want = {};
     ref.verses.forEach(function (n) { want[n] = true; });
-    return fetch(url).then(function (r) {
+    var query = '{passages(version: tb, book: "' + bookToken(ref.book) +
+      '", chapter: ' + ref.chapter + "){verses{verse type content}}}";
+    return fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query })
+    }).then(function (r) {
       if (!r.ok) throw new Error("http " + r.status);
       return r.json();
-    }).then(function (verses) {
-      return verses.filter(function (v) { return want[v.verse]; });
+    }).then(function (d) {
+      var verses = (d.data && d.data.passages && d.data.passages.verses) || [];
+      return verses.filter(function (v) {
+        return v.type === "content" && want[v.verse];
+      });
     });
   }
 
@@ -125,7 +126,9 @@
         } else {
           html += '<p class="verstext">';
           res.verses.forEach(function (v) {
-            html += "<sup>" + v.verse + "</sup> " + esc(v.text) + " ";
+            // Strip TB's leading "(18-7)" Psalm dual-numbering marker.
+            var text = v.content.replace(/^\(\d+-\d+\)\s*/, "");
+            html += "<sup>" + v.verse + "</sup> " + esc(text) + " ";
           });
           html += "</p>";
         }
