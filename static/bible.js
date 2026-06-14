@@ -1,13 +1,29 @@
-// Tap a verse reference -> show the Indonesian (TB) text in a bottom sheet.
-// Source: Prayer Pulse API (CORS-enabled, no key). Called from the browser
-// directly so it works on PythonAnywhere free (no server-side outbound needed).
+// Tap a verse reference -> show the passage text in a bottom sheet, with a
+// reader-chosen version (TB default). Source: sonnylab GraphQL (single ACAO
+// header), called from the browser directly so it works on PythonAnywhere free.
 //
-// fetchPassage() is the single indirection point: to switch providers later
-// (e.g. a same-origin proxy on a paid host), change only this function.
+// getChapter() is the single indirection point: to add a provider for a version
+// it doesn't carry (e.g. BIS/TSI via a proxy), route inside getChapter().
 (function () {
   "use strict";
 
   var API = "https://bible.sonnylab.com/";  // GraphQL, single ACAO header (browser-safe)
+
+  // Versions offered in the switcher (value = sonnylab enum, label = chip text).
+  var VERSIONS = [
+    { v: "tb", label: "TB", full: "Alkitab Terjemahan Baru (TB)" },
+    { v: "niv", label: "NIV", full: "New International Version (NIV)" },
+    { v: "av", label: "KJV", full: "King James Version (KJV)" }
+  ];
+  function isVersion(v) { return VERSIONS.some(function (x) { return x.v === v; }); }
+  function versionFull() {
+    for (var i = 0; i < VERSIONS.length; i++) {
+      if (VERSIONS[i].v === curVer) return VERSIONS[i].full;
+    }
+    return curVer;
+  }
+  var curVer = "tb";
+  try { var s = localStorage.getItem("bibleVersion"); if (isVersion(s)) curVer = s; } catch (e) {}
 
   // sonnylab accepts full Indonesian names for most books, but numbered and a
   // couple of multi-word books need a SABDA-style token. Only the exceptions are
@@ -71,7 +87,8 @@
   // reused for the rest of the session (in-memory) and across visits
   // (localStorage). Verse ranges within the same chapter share one fetch.
   var mem = {};
-  function chapterKey(tok, ch) { return "bibletb1:" + tok + ":" + ch; }
+  // Cache key includes the version, so each version is cached separately.
+  function chapterKey(tok, ch) { return "bible1:" + curVer + ":" + tok + ":" + ch; }
 
   function getChapter(tok, chapter) {
     var key = chapterKey(tok, chapter);
@@ -81,7 +98,7 @@
       if (stored) { mem[key] = JSON.parse(stored); return Promise.resolve(mem[key]); }
     } catch (e) { /* localStorage unavailable */ }
 
-    var query = '{passages(version: tb, book: "' + tok +
+    var query = '{passages(version: ' + curVer + ', book: "' + tok +
       '", chapter: ' + chapter + "){verses{verse type content}}}";
     return fetch(API, {
       method: "POST",
@@ -120,6 +137,21 @@
   if (!sheet) return;
   var titleEl = document.getElementById("verseTitle");
   var bodyEl = document.getElementById("verseBody");
+  var versionSel = document.getElementById("verseVersion");
+  var currentRaw = null;  // the reference currently shown, for re-render on version change
+
+  if (versionSel) {
+    versionSel.innerHTML = VERSIONS.map(function (x) {
+      return '<option value="' + x.v + '">' + x.label + "</option>";
+    }).join("");
+    versionSel.value = curVer;
+    versionSel.addEventListener("change", function () {
+      if (!isVersion(this.value)) return;
+      curVer = this.value;
+      try { localStorage.setItem("bibleVersion", curVer); } catch (e) {}
+      if (currentRaw) showVerses(currentRaw);  // reload open passages in the new version
+    });
+  }
 
   function openSheet() { sheet.hidden = false; document.body.classList.add("sheet-open"); }
   function closeSheet() { sheet.hidden = true; document.body.classList.remove("sheet-open"); }
@@ -160,6 +192,7 @@
 
   function showVerses(rawRef) {
     openSheet();
+    currentRaw = rawRef;
     titleEl.textContent = rawRef;
     var refs = parseRefs(rawRef);
     if (!refs.length) {
@@ -182,7 +215,7 @@
     });
     var foot = document.createElement("p");
     foot.className = "versver";
-    foot.textContent = "Alkitab Terjemahan Baru (TB)";
+    foot.textContent = versionFull();
     bodyEl.appendChild(foot);
   }
 

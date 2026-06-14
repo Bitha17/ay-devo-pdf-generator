@@ -298,6 +298,16 @@ body {
   color: var(--accent);
   font-size: 18px;
 }
+.verseversion {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
 .versesheet-close {
   border: none;
   background: var(--bg);
