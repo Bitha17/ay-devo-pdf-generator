@@ -272,25 +272,25 @@ body {
 .versesheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
 .versesheet-panel {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 680px;
   max-height: 82vh;
-  overflow-y: auto;
   background: var(--surface);
   border-radius: 18px 18px 0 0;
   box-shadow: var(--shadow);
-  padding: 18px 18px 28px;
   animation: sheetup 0.22s ease;
 }
 @keyframes sheetup { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .versesheet-head {
-  position: sticky;
-  top: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
   background: var(--surface);
-  padding-bottom: 10px;
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px 12px;
 }
 .versesheet-head strong {
   flex: 1;
@@ -308,7 +308,14 @@ body {
   cursor: pointer;
   font-size: 14px;
 }
-.versesheet-body { font-size: 15px; line-height: 1.7; }
+.versesheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 18px 28px;
+  font-size: 15px;
+  line-height: 1.7;
+}
 .versref {
   font-family: "Biondi", sans-serif;
   color: var(--accent);
