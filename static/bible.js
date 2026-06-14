@@ -67,11 +67,22 @@
     return refs;
   }
 
-  function fetchPassage(ref) {
-    var want = {};
-    ref.verses.forEach(function (n) { want[n] = true; });
-    var query = '{passages(version: tb, book: "' + bookToken(ref.book) +
-      '", chapter: ' + ref.chapter + "){verses{verse type content}}}";
+  // Cache whole chapters. The Bible text never changes, so a fetched chapter is
+  // reused for the rest of the session (in-memory) and across visits
+  // (localStorage). Verse ranges within the same chapter share one fetch.
+  var mem = {};
+  function chapterKey(tok, ch) { return "bibletb1:" + tok + ":" + ch; }
+
+  function getChapter(tok, chapter) {
+    var key = chapterKey(tok, chapter);
+    if (mem[key]) return Promise.resolve(mem[key]);
+    try {
+      var stored = localStorage.getItem(key);
+      if (stored) { mem[key] = JSON.parse(stored); return Promise.resolve(mem[key]); }
+    } catch (e) { /* localStorage unavailable */ }
+
+    var query = '{passages(version: tb, book: "' + tok +
+      '", chapter: ' + chapter + "){verses{verse type content}}}";
     return fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -81,6 +92,18 @@
       return r.json();
     }).then(function (d) {
       var verses = (d.data && d.data.passages && d.data.passages.verses) || [];
+      // Don't cache a "book not found" response (only a verse-0 copyright row).
+      if (!verses.some(function (v) { return v.verse > 0; })) throw new Error("not found");
+      mem[key] = verses;
+      try { localStorage.setItem(key, JSON.stringify(verses)); } catch (e) { /* quota */ }
+      return verses;
+    });
+  }
+
+  function fetchPassage(ref) {
+    var want = {};
+    ref.verses.forEach(function (n) { want[n] = true; });
+    return getChapter(bookToken(ref.book), ref.chapter).then(function (verses) {
       return verses.filter(function (v) {
         return v.type === "content" && want[v.verse];
       });
@@ -147,4 +170,14 @@
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && !sheet.hidden) closeSheet();
   });
+
+  // Warm the cache for the current day's verses so the first tap is instant.
+  setTimeout(function () {
+    var active = document.querySelector(".day.active .versebtn") ||
+                 document.querySelector(".versebtn");
+    if (!active) return;
+    parseRefs(active.dataset.ref).forEach(function (ref) {
+      getChapter(bookToken(ref.book), ref.chapter).catch(function () {});
+    });
+  }, 800);
 })();
