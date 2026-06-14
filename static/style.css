@@ -317,9 +317,20 @@ body {
   letter-spacing: 0.04em;
   margin: 14px 0 6px;
 }
+.versblock { margin-bottom: 4px; }
 .verstext { margin: 0; }
 .verstext sup { color: var(--accent); font-weight: 700; font-size: 0.7em; margin-right: 2px; }
 .verserr { color: var(--muted); font-size: 14px; }
+.versretry {
+  border: 1px solid var(--accent);
+  background: none;
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-left: 4px;
+}
 .versloading {
   display: flex;
   align-items: center;

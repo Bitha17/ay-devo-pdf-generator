@@ -124,41 +124,66 @@
   function openSheet() { sheet.hidden = false; document.body.classList.add("sheet-open"); }
   function closeSheet() { sheet.hidden = true; document.body.classList.remove("sheet-open"); }
 
+  function renderSlot(slot, verses) {
+    var html = '<p class="verstext">';
+    verses.forEach(function (v) {
+      // Strip TB's leading "(18-7)" Psalm dual-numbering marker.
+      var text = v.content.replace(/^\(\d+-\d+\)\s*/, "");
+      html += "<sup>" + v.verse + "</sup> " + esc(text) + " ";
+    });
+    slot.innerHTML = html + "</p>";
+  }
+
+  // Load one passage into its slot, retrying transient failures with backoff.
+  var MAX_TRIES = 4;
+  function loadSlot(slot, ref, attempt) {
+    fetchPassage(ref).then(function (verses) {
+      if (!verses.length) throw new Error("empty");
+      renderSlot(slot, verses);  // shown as soon as THIS passage is ready
+    }).catch(function () {
+      if (attempt + 1 < MAX_TRIES) {
+        slot.innerHTML =
+          '<div class="versloading"><span class="spinner"></span> Mencoba lagi…</div>';
+        setTimeout(function () { loadSlot(slot, ref, attempt + 1); }, 600 * (attempt + 1));
+      } else {
+        slot.innerHTML =
+          '<p class="verserr">Tidak dapat memuat ayat ini. ' +
+          '<button type="button" class="versretry">Coba lagi</button></p>';
+        slot.querySelector(".versretry").addEventListener("click", function () {
+          slot.innerHTML =
+            '<div class="versloading"><span class="spinner"></span> Memuat ayat…</div>';
+          loadSlot(slot, ref, 0);
+        });
+      }
+    });
+  }
+
   function showVerses(rawRef) {
     openSheet();
     titleEl.textContent = rawRef;
-    bodyEl.innerHTML =
-      '<div class="versloading"><span class="spinner"></span> Memuat ayat…</div>';
-
     var refs = parseRefs(rawRef);
     if (!refs.length) {
       bodyEl.innerHTML = '<p class="verserr">Referensi tidak dikenali.</p>';
       return;
     }
-    Promise.all(refs.map(function (ref) {
-      return fetchPassage(ref)
-        .then(function (vs) { return { ref: ref, verses: vs }; })
-        .catch(function () { return { ref: ref, error: true }; });
-    })).then(function (results) {
-      var html = "";
-      results.forEach(function (res) {
-        html += '<h4 class="versref">' + esc(res.ref.label) + "</h4>";
-        if (res.error || !res.verses.length) {
-          html += '<p class="verserr">Tidak dapat memuat ayat ini. ' +
-            'Periksa koneksi atau coba lagi.</p>';
-        } else {
-          html += '<p class="verstext">';
-          res.verses.forEach(function (v) {
-            // Strip TB's leading "(18-7)" Psalm dual-numbering marker.
-            var text = v.content.replace(/^\(\d+-\d+\)\s*/, "");
-            html += "<sup>" + v.verse + "</sup> " + esc(text) + " ";
-          });
-          html += "</p>";
-        }
-      });
-      html += '<p class="versver">Alkitab Terjemahan Baru (TB)</p>';
-      bodyEl.innerHTML = html;
+    // One independent block per passage; each renders the moment it loads.
+    bodyEl.innerHTML = "";
+    refs.forEach(function (ref, i) {
+      var block = document.createElement("div");
+      block.className = "versblock";
+      block.innerHTML =
+        '<h4 class="versref">' + esc(ref.label) + "</h4>" +
+        '<div class="versslot"><div class="versloading">' +
+        '<span class="spinner"></span> Memuat ayat…</div></div>';
+      bodyEl.appendChild(block);
+      var slot = block.querySelector(".versslot");
+      // Stagger the initial requests a little to ease load on the API.
+      setTimeout(function () { loadSlot(slot, ref, 0); }, i * 150);
     });
+    var foot = document.createElement("p");
+    foot.className = "versver";
+    foot.textContent = "Alkitab Terjemahan Baru (TB)";
+    bodyEl.appendChild(foot);
   }
 
   // Open on tapping any verse reference; close via backdrop / close button / Esc.
