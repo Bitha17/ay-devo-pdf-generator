@@ -39,47 +39,47 @@
     <div class="theme">{{ day.theme }}</div>
     {% if day.verse %}<button type="button" class="verse versebtn" data-ref="{{ day.verse }}"
         title="Ketuk untuk baca ayat">📖 {{ day.verse }}</button>{% endif %}
-    {% if day.key_message %}<div class="keymsg">{{ day.key_message }}</div>{% endif %}
-    {% if day.m1 %}<div class="m1">{{ day.m1 }}</div>{% endif %}
+    {% if day.key_message %}<div class="keymsg">{{ day.key_message | markup }}</div>{% endif %}
+    {% if day.m1 %}<div class="m1">{{ day.m1 | markup }}</div>{% endif %}
 
     {% if day.questions %}
     <div class="section">
       <h3><img src="{{ url_for('asset_icon', name='PP.png') }}" alt="">Pertanyaan Perenungan</h3>
-      <ol>{% for q in day.questions %}<li>{{ q }}</li>{% endfor %}</ol>
+      <ol>{% for q in day.questions %}<li>{{ q | markup }}</li>{% endfor %}</ol>
     </div>
     {% endif %}
 
     {% if day.context %}
     <div class="section">
       <h3><img src="{{ url_for('asset_icon', name='K.png') }}" alt="">Konteks</h3>
-      {% for para in day.context.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+      {% for para in day.context.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}
     </div>
     {% endif %}
 
     {% if day.firman_kristus %}
     <div class="section">
       <h3><img src="{{ url_for('asset_icon', name='FK.png') }}" alt="">Firman Kristus</h3>
-      {% for para in day.firman_kristus.split('\n') if para.strip() %}<p>{{ para }}</p>{% endfor %}
+      {% for para in day.firman_kristus.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}
     </div>
     {% endif %}
 
     {% if day.aplikasi %}
     <div class="section">
       <h3><img src="{{ url_for('asset_icon', name='AP.png') }}" alt="">Aplikasi</h3>
-      <ol>{% for a in day.aplikasi %}<li>{{ a }}</li>{% endfor %}</ol>
+      <ol>{% for a in day.aplikasi %}<li>{{ a | markup }}</li>{% endfor %}</ol>
     </div>
     {% endif %}
 
     {% if day.m3 %}
     <div class="reflect">
       <div class="label">Responsku (M3)</div>
-      <p>{{ day.m3 }}</p>
+      <p>{{ day.m3 | markup }}</p>
     </div>
     {% endif %}
     {% if day.m4 %}
     <div class="reflect">
       <div class="label">Langkah (M4)</div>
-      {% for line in day.m4.split('\n') if line.strip() %}<p>✦ {{ line.strip() }}</p>{% endfor %}
+      {% for line in day.m4.split('\n') if line.strip() %}<p>✦ {{ line.strip() | markup }}</p>{% endfor %}
     </div>
     {% endif %}
   </div>

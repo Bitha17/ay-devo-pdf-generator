@@ -1,9 +1,12 @@
 import os
 import io
+import re
 import hmac
 from datetime import datetime, timezone
 from functools import wraps
 from zoneinfo import ZoneInfo
+
+from markupsafe import Markup, escape
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -111,6 +114,23 @@ def pick_current(published):
 
 
 app.jinja_env.globals.update(to_local=to_local, is_published=is_published)
+
+
+# The devotion text carries reportlab-style inline markup (<b>, <i>, …) that the
+# PDF renders. Escape everything, then re-allow only a small whitelist of inline
+# formatting tags so the web view shows bold/italic without opening an XSS hole.
+_ALLOWED_MARKUP = re.compile(
+    r"&lt;(/?)(br|strong|em|b|i|u)\s*(/?)&gt;", re.IGNORECASE
+)
+
+
+@app.template_filter("markup")
+def markup_filter(text):
+    out = _ALLOWED_MARKUP.sub(
+        lambda m: "<%s%s%s>" % (m.group(1), m.group(2).lower(), m.group(3)),
+        str(escape(text or "")),
+    )
+    return Markup(out)
 
 
 # ------------------------------------------------------- brand assets
