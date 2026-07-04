@@ -43,12 +43,13 @@
     return BOOK_TOKEN[key] || name.trim();
   }
 
-  // A verse spec like "21-28", "3,5,7" or "1-2,5" -> [21,22,...] / [3,5,7].
+  // A verse spec like "21-28", "3,5,7", "1-2,5" -> [21,22,...] / [3,5,7].
+  // Partial-verse letters ("14a", "14b") are stripped so we show the FULL verse.
   function parseVerseSpec(spec) {
     var wanted = [];
     spec.split(",").forEach(function (part) {
       part = part.replace(/\s+/g, "");
-      var m = part.match(/^(\d+)(?:[-–](\d+))?$/);
+      var m = part.match(/^(\d+)[a-d]?(?:[-–](\d+)[a-d]?)?$/i);
       if (!m) return;
       var a = parseInt(m[1], 10), b = m[2] ? parseInt(m[2], 10) : a;
       for (var i = a; i <= b; i++) wanted.push(i);
@@ -68,7 +69,7 @@
       seg.split(/,(?=\s*[A-Za-z])/).forEach(function (piece) {
         piece = piece.trim();
         if (!piece) return;
-        var m = piece.match(/^(.+?)\s+(\d+):([\d,\-–\s]+)$/);
+        var m = piece.match(/^(.+?)\s+(\d+):([0-9a-dA-D,\s–-]+)$/);
         if (!m) return;
         var wanted = parseVerseSpec(m[3]);
         if (!wanted.length) return;
