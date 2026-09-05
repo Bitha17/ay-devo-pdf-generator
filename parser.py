@@ -16,6 +16,16 @@ def extract_list(pattern, text):
     return [x.strip() for x in re.findall(pattern, text)]
 
 
+def extract_items(block):
+    """A numbered list ('1. ...', '2. ...'), or — if the source doesn't
+    number items itself (e.g. a docx with one paragraph per question, no
+    manual numbering) — one item per non-empty line."""
+    numbered = extract_list(r"\d+\.\s*(.*)", block)
+    if numbered:
+        return numbered
+    return [line.strip() for line in block.splitlines() if line.strip()]
+
+
 # ----------------------------
 # Week & Month
 # ----------------------------
@@ -31,8 +41,14 @@ def extract_week_info(text):
 # ----------------------------
 def split_days(text):
     pattern = rf"(?={DAYS_PATTERN})"
+    day_re = re.compile(DAYS_PATTERN)
     chunks = re.split(pattern, text)
-    return [c.strip() for c in chunks if c.strip()]
+    # The chunk before the first real day header is whatever came before it
+    # (the week/month/period header, normally dropped via the underscore-
+    # separator strip in parse_text) — keep only chunks that actually start
+    # with a day header, so a missing separator can't leak that header text
+    # in as a bogus extra "day".
+    return [c.strip() for c in chunks if c.strip() and day_re.match(c.strip())]
 
 
 # ----------------------------
@@ -75,7 +91,7 @@ def parse_day(day_text):
         r"Pertanyaan Perenungan Ayat\s*:\s*(.*?)(?=Segment 1:|M2:|Segment 2:)",
         full_text
     )
-    data["questions"] = extract_list(r"\d+\.\s*(.*)", questions_block)
+    data["questions"] = extract_items(questions_block)
 
     data["context"] = extract(
         r"Segment 1:.*?\n(.*?)(?=Segment 2:)",
@@ -90,7 +106,7 @@ def parse_day(day_text):
         r"Aplikasi\s*:\s*(.*?)(?=M3:)",
         full_text
     )
-    data["aplikasi"] = extract_list(r"\d+\.\s*(.*)", aplikasi_block)
+    data["aplikasi"] = extract_items(aplikasi_block)
 
 
     data["m3"] = extract(r"M3: Yang saya akan lakukan setelah menerima Firman Kristus ini adalah…\s*(.*?)(?=M4:|$)", full_text)
@@ -132,6 +148,22 @@ def parse_txt_file(path):
 # formatting isn't meaningful, so it's stripped back to plain text.
 _DOCX_RICH_FIELDS = {"context", "firman_kristus"}
 
+# Structural marker lines (field labels, day headers, underscore separators)
+# must stay plain even if bold/italic was applied to them in Word: the
+# parser locates fields by searching for this literal text, and admins
+# often bold a heading like "Segment 2:" for visual emphasis in the doc.
+# If that got wrapped in <b>, the tag would land right before the label —
+# leaking an unclosed <b> onto the end of whatever field's regex capture
+# stops at that label (via a lookahead), since the closing </b> (after the
+# label) falls outside that capture and is silently discarded. Forcing
+# these lines to plain text avoids the leak entirely.
+_STRUCTURAL_LINE_RE = re.compile(
+    r"^(?:_{3,}"
+    r"|(?:THEME|Ayat Bacaan|M1|Key Message|Pertanyaan Perenungan Ayat"
+    r"|M2|Segment 1|Segment 2|Aplikasi|M3|M4)\s*:"
+    rf"|{DAYS_PATTERN})"
+)
+
 
 def parse_docx_paragraphs(paragraphs):
     """Same field-label format as the .txt (THEME:, Ayat Bacaan:, M1:, …),
@@ -139,13 +171,17 @@ def parse_docx_paragraphs(paragraphs):
     pre-wrapped as <b>/<i> tags (see docx_utils), so this reconstructs a
     line-per-paragraph blob and reuses the exact same regex-based parsing
     the .txt format uses — meaning field labels (THEME:, Segment 1:, …) and
-    day headers must be plain, unformatted text for the label matching to
-    work. Bold/italic is then kept only for Segment 1 (context) and
-    Segment 2 (firman_kristus); every other field is stripped back to plain
-    text even if it was formatted in the source doc."""
+    day headers are always read as plain text (see _STRUCTURAL_LINE_RE)
+    regardless of their own formatting. Bold/italic is then kept only for
+    Segment 1 (context) and Segment 2 (firman_kristus); every other field
+    is stripped back to plain text even if it was formatted in the source
+    doc."""
     from docx_utils import strip_bi_tags
 
-    text = "\n".join(p["rich"] for p in paragraphs)
+    text = "\n".join(
+        p["plain"] if _STRUCTURAL_LINE_RE.match(p["plain"]) else p["rich"]
+        for p in paragraphs
+    )
     parsed = parse_text(text)
     for day in parsed["days"]:
         for key, value in day.items():
