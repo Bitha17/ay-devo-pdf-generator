@@ -15,6 +15,8 @@
       if (isImage) {
         target.src = URL.createObjectURL(file);
         target.style.display = "block";
+      } else if (/\.docx$/i.test(file.name)) {
+        target.style.display = "none";  // binary — nothing useful to preview as text
       } else {
         var reader = new FileReader();
         reader.onload = function (e) {

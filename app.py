@@ -14,11 +14,12 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
-from parser import parse_txt_file
+from parser import parse_txt_file, parse_docx_paragraphs as parse_ay_docx_paragraphs
 from parser_umum import parse_docx_file
-from pdf import generate_pdf, generate_pdf_from_data
+from pdf import generate_pdf_from_data
 from pdf_umum import generate_pdf_from_data_umum
 from content import make_slug, make_slug_umum, extract_title, parse_id_date
+from docx_utils import extract_docx_paragraphs
 import db
 
 # Secrets come from the environment (set them in the WSGI file on PythonAnywhere).
@@ -270,14 +271,23 @@ def admin_upload():
     txt_path = os.path.join(db.UPLOAD_DIR, secure_filename(txt_file.filename))
     txt_file.save(txt_path)
 
-    parsed = parse_txt_file(txt_path)
+    # .docx: same field-label format, but bold/italic come from real Word
+    # formatting instead of literal <b>/<i> tags.
+    if txt_path.lower().endswith(".docx"):
+        paragraphs = extract_docx_paragraphs(txt_path)
+        parsed = parse_ay_docx_paragraphs(paragraphs)
+        raw_text = "\n".join(p["plain"] for p in paragraphs)
+    else:
+        parsed = parse_txt_file(txt_path)
+        with open(txt_path, encoding="utf-8-sig") as f:
+            raw_text = f.read()
+
     slug = make_slug(parsed["week"], parsed["month"])
 
     # Title: use the admin's override if given, else derive it from the text.
     title = request.form.get("title", "").strip()
     if not title:
-        with open(txt_path, encoding="utf-8-sig") as f:
-            title = extract_title(f.read())
+        title = extract_title(raw_text)
 
     # PDF cover (mandatory) — the PDF's first-page background.
     image_path = None
@@ -292,8 +302,10 @@ def admin_upload():
         hero_path = os.path.join(db.UPLOAD_DIR, f"{slug}_hero_" + secure_filename(web_hero.filename))
         web_hero.save(hero_path)
 
-    # Generate the PDF once, at publish time, and store it on disk.
-    pdf_buffer, pdf_name = generate_pdf(txt_path, cover_for_pdf, current_bg_path())
+    # Generate the PDF once, at publish time, and store it on disk. `parsed`
+    # is already parsed above (from either .txt or .docx), so render from
+    # that rather than re-parsing the file.
+    pdf_buffer, pdf_name = generate_pdf_from_data(parsed, cover_for_pdf, current_bg_path())
     pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
     with open(pdf_path, "wb") as f:
         f.write(pdf_buffer.getvalue())
@@ -347,7 +359,10 @@ def admin_edit_save(slug):
     if txt_file and txt_file.filename:
         txt_path = os.path.join(db.UPLOAD_DIR, f"{slug}_edit_" + secure_filename(txt_file.filename))
         txt_file.save(txt_path)
-        parsed = parse_txt_file(txt_path)
+        if txt_path.lower().endswith(".docx"):
+            parsed = parse_ay_docx_paragraphs(extract_docx_paragraphs(txt_path))
+        else:
+            parsed = parse_txt_file(txt_path)
         week, month, period = parsed["week"], parsed["month"], parsed["period"]
         _delete_file(txt_path)  # only needed to parse; PDF regenerates from data
         regen_pdf = True

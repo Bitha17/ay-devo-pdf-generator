@@ -102,10 +102,7 @@ def parse_day(day_text):
 # ----------------------------
 # Main parser
 # ----------------------------
-def parse_txt_file(path):
-    with open(path, encoding="utf-8-sig") as f:
-        text = f.read()
-
+def parse_text(text):
     week, month, period = extract_week_info(text)
 
     # Remove header before first line of underscores
@@ -122,6 +119,29 @@ def parse_txt_file(path):
         "period": period,
         "days": days
     }
+
+
+def parse_txt_file(path):
+    with open(path, encoding="utf-8-sig") as f:
+        text = f.read()
+    return parse_text(text)
+
+
+def parse_docx_paragraphs(paragraphs):
+    """Same field-label format as the .txt (THEME:, Ayat Bacaan:, M1:, …),
+    but sourced from a Word doc's paragraphs. Bold/italic runs come in
+    pre-wrapped as <b>/<i> tags (see docx_utils), so this reconstructs a
+    line-per-paragraph blob and reuses the exact same regex-based parsing
+    the .txt format uses — meaning field labels (THEME:, Segment 1:, …) and
+    day headers must be plain, unformatted text for the label matching to
+    work, but any of the free-text content around them can be bold/italic."""
+    text = "\n".join(p["rich"] for p in paragraphs)
+    return parse_text(text)
+
+
+def parse_docx_file(path):
+    from docx_utils import extract_docx_paragraphs
+    return parse_docx_paragraphs(extract_docx_paragraphs(path))
 
 
 # ----------------------------

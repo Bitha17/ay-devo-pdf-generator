@@ -8,7 +8,11 @@
 </div>
 
 <details class="guide">
-  <summary>📋 .txt format guide</summary>
+  <summary>📋 .txt / .docx format guide</summary>
+
+  <p>Either file type works, using the same field-label structure (THEME:,
+  Ayat Bacaan:, M1:, Key Message:, Segment 1:/2:, Aplikasi:, M3:/M4:) shown
+  below.</p>
 
   <h4>Header (before the first line of underscores)</h4>
   <pre>Week 4 Jan 2026 - Kabar Baik untuk Orang Miskin
@@ -49,14 +53,19 @@ ________________</pre>
   but not read by the parser.</p>
 
   <h4>Inline formatting</h4>
-  <p>Any field can contain <code>&lt;b&gt;bold&lt;/b&gt;</code>,
-  <code>&lt;i&gt;italic&lt;/i&gt;</code>, or <code>&lt;br&gt;</code> — they
-  render in both the PDF and the web view.</p>
+  <p><strong>In a .txt file</strong>, any field can contain
+  <code>&lt;b&gt;bold&lt;/b&gt;</code>, <code>&lt;i&gt;italic&lt;/i&gt;</code>,
+  or <code>&lt;br&gt;</code> — they render in both the PDF and the web view.</p>
+  <p><strong>In a .docx file</strong>, skip the tags — just select text and use
+  Word's normal Bold/Italic formatting, and it carries through automatically.
+  Only keep the field labels themselves (<code>THEME:</code>,
+  <code>Segment 1:</code>, day headers, etc.) as plain, unformatted text, since
+  those are matched literally.</p>
 </details>
 
 <form class="formcard" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
-  <label>Devotion text (.txt)</label>
-  <input type="file" name="txt" accept=".txt" required
+  <label>Devotion text (.txt or .docx)</label>
+  <input type="file" name="txt" accept=".txt,.docx" required
          data-preview="txtPreview" data-preview-type="text">
   <pre id="txtPreview" class="filepreview txtpreview" style="display:none"></pre>
 
