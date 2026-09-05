@@ -7,6 +7,45 @@
   <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
 </div>
 
+<details class="guide">
+  <summary>📋 .docx format guide</summary>
+
+  <p>Plain paragraphs — no field labels, no tables. First paragraph is the
+  week's title, then one block per day:</p>
+  <pre>Semakin Mengenal dan Menyembah Dia   ← week title (paragraph 1, once)
+
+Senin                                 ← day name (Indonesian)
+Allah yang Layak Disembah             ← that day's theme
+Mazmur 96:1–9                         ← bible reference
+
+Konteks
+Mazmur ini adalah sebuah nyanyian pujian yang menegaskan…
+
+Firman Kristus
+Mazmur ini mengajarkan bahwa Allah adalah Pribadi yang…
+
+Pertanyaan
+Dari bacaan ini mengapa seluruh bumi sepatutnya menyembah…
+Coba renungkan, apakah kehidupan saudara sudah memuliakan Allah?
+Bagaimana saudara dapat menyembah Allah dalam kehidupan sehari-hari?
+
+Selasa                                ← next day, same shape
+…</pre>
+  <p>Repeat the day block for every day of the week, in order — <strong>Senin,
+  Selasa, Rabu, Kamis, Jumat, Sabtu, Minggu</strong>. Each question is its own
+  paragraph (no manual numbering — the PDF and web view number them
+  automatically). Blank lines between paragraphs are fine and ignored.</p>
+  <p>Since the docx has no calendar dates, the <strong>Week start date</strong>
+  field below is required — it's assigned to the first day block, and the rest
+  follow in order.</p>
+
+  <h4>Inline formatting</h4>
+  <p><strong>Bold</strong> and <em>italic</em> text applied in Word (within
+  Konteks, Firman Kristus, or Pertanyaan) carries through to both the PDF and
+  the web view — just select the text and use Word's normal Bold/Italic
+  formatting.</p>
+</details>
+
 <form class="formcard" method="post" action="{{ url_for('admin_umum_upload') }}" enctype="multipart/form-data">
   <label>Devotion text (.docx)</label>
   <input type="file" name="docx" accept=".docx" required>

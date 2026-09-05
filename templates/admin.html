@@ -7,6 +7,53 @@
   <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
 </div>
 
+<details class="guide">
+  <summary>📋 .txt format guide</summary>
+
+  <h4>Header (before the first line of underscores)</h4>
+  <pre>Week 4 Jan 2026 - Kabar Baik untuk Orang Miskin
+25-31 Januari 2026
+________________</pre>
+  <p>The title (used if you don't override it below) is whatever follows the
+  first " - " on line 1.</p>
+
+  <h4>Each day</h4>
+  <pre>Minggu, 25 Januari 2026 - JOL
+THEME: Kasih Yesus bagi Mereka yang Dianggap Tak Berhak
+Ayat Bacaan: Matius 15:21-28
+M1: Berdoalah kepada Allah agar kamu memahami pesan Allah hari ini.
+Key Message: Yesus datang bukan hanya untuk orang yang dianggap berhak…
+Pertanyaan Perenungan Ayat:
+1. Mengapa perempuan Kanaan itu tetap datang kepada Yesus?
+2. Apa yang Yesus lihat dari iman perempuan tersebut?
+________________
+
+M2: DEVOTION
+Segment 1: [Konteks / Penjelasan Ayat]
+Dalam peristiwa ini, Yesus bertemu dengan seorang perempuan Kanaan…
+Segment 2: [Gospel Connection / Firman Kristus]
+Melalui peristiwa ini, Yesus menunjukkan bahwa kasih dan keselamatan…
+Aplikasi:
+1. Pernahkah kamu merasa tidak layak datang kepada Tuhan?
+2. Apakah kamu masih membatasi kasih Tuhan hanya untuk orang tertentu?
+________________
+
+M3: Yang saya akan lakukan setelah menerima Firman Kristus ini adalah…
+Saya mau datang kepada Yesus dengan iman…
+M4: Share saat teduh hari ini ke pembina atau kompakmu!
+________________</pre>
+  <p>Day header format: <code>&lt;Hari&gt;, &lt;tanggal&gt; - &lt;inisial&gt;</code>
+  (day name in Indonesian: Minggu/Senin/Selasa/Rabu/Kamis/Jumat/Sabtu). Repeat
+  the block above once per day, each starting with its own day header line and
+  separated by a line of underscores. <code>M2:</code> is written by convention
+  but not read by the parser.</p>
+
+  <h4>Inline formatting</h4>
+  <p>Any field can contain <code>&lt;b&gt;bold&lt;/b&gt;</code>,
+  <code>&lt;i&gt;italic&lt;/i&gt;</code>, or <code>&lt;br&gt;</code> — they
+  render in both the PDF and the web view.</p>
+</details>
+
 <form class="formcard" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
   <label>Devotion text (.txt)</label>
   <input type="file" name="txt" accept=".txt" required

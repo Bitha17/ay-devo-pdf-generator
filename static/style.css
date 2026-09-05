@@ -537,6 +537,48 @@ input[type="text"], input[type="file"], input[type="datetime-local"], input[type
   font-weight: 600;
 }
 
+/* ---- Format guide (collapsible, on the admin upload forms) ---- */
+details.guide {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+details.guide summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+}
+details.guide[open] summary { margin-bottom: 10px; }
+details.guide h4 { margin: 14px 0 4px; font-size: 13px; color: var(--text); }
+details.guide h4:first-of-type { margin-top: 0; }
+details.guide p { margin: 4px 0; }
+details.guide pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+}
+details.guide code {
+  font-family: ui-monospace, Menlo, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+details.guide ul { margin: 4px 0; padding-left: 1.2em; }
+
 .flash {
   background: #1f9d5522;
   color: #1f9d55;

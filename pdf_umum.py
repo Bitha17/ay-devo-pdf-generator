@@ -26,6 +26,13 @@ LOGO_PATH = os.path.join(BASE_DIR, "icons", "abbalove_logo.png")
 # this module has no load-order dependency on pdf.py.
 pdfmetrics.registerFont(TTFont("UmumBody", os.path.join(BASE_DIR, "fonts", "Outfit", "Outfit-Regular.ttf")))
 pdfmetrics.registerFont(TTFont("UmumBody-Bold", os.path.join(BASE_DIR, "fonts", "Outfit", "Outfit-Bold.ttf")))
+pdfmetrics.registerFont(TTFont("UmumBody-Italic", os.path.join(BASE_DIR, "fonts", "Inter", "Inter_18pt-Italic.ttf")))
+pdfmetrics.registerFont(TTFont("UmumBody-BoldItalic", os.path.join(BASE_DIR, "fonts", "Inter", "Inter_18pt-BoldItalic.ttf")))
+pdfmetrics.registerFontFamily(
+    "UmumBody",
+    normal="UmumBody", bold="UmumBody-Bold",
+    italic="UmumBody-Italic", boldItalic="UmumBody-BoldItalic",
+)
 
 HEADING_STYLE = ParagraphStyle(
     name="UmumHeading", fontName="UmumBody-Bold", fontSize=16, leading=20,
