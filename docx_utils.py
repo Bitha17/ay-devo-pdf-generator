@@ -6,10 +6,18 @@ the bare text (for structural matching — headers, labels, day names),
 `rich` is the same text with bold/italic runs wrapped in <b>/<i> tags,
 matching the inline-markup convention the AY .txt format already uses.
 """
+import re
 import zipfile
 from xml.etree import ElementTree as ET
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_BI_TAG_RE = re.compile(r"</?[bi]>", re.IGNORECASE)
+
+
+def strip_bi_tags(text):
+    """Remove <b>/<i> markup, leaving the plain text — for fields where a
+    docx's Bold/Italic formatting shouldn't carry through."""
+    return _BI_TAG_RE.sub("", text)
 
 
 def _run_is_on(rpr, tag):

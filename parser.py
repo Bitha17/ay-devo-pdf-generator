@@ -127,6 +127,12 @@ def parse_txt_file(path):
     return parse_text(text)
 
 
+# Only these fields keep a docx's Bold/Italic formatting; every other field
+# is a short structured line (theme, verse, a question, …) where inline
+# formatting isn't meaningful, so it's stripped back to plain text.
+_DOCX_RICH_FIELDS = {"context", "firman_kristus"}
+
+
 def parse_docx_paragraphs(paragraphs):
     """Same field-label format as the .txt (THEME:, Ayat Bacaan:, M1:, …),
     but sourced from a Word doc's paragraphs. Bold/italic runs come in
@@ -134,9 +140,22 @@ def parse_docx_paragraphs(paragraphs):
     line-per-paragraph blob and reuses the exact same regex-based parsing
     the .txt format uses — meaning field labels (THEME:, Segment 1:, …) and
     day headers must be plain, unformatted text for the label matching to
-    work, but any of the free-text content around them can be bold/italic."""
+    work. Bold/italic is then kept only for Segment 1 (context) and
+    Segment 2 (firman_kristus); every other field is stripped back to plain
+    text even if it was formatted in the source doc."""
+    from docx_utils import strip_bi_tags
+
     text = "\n".join(p["rich"] for p in paragraphs)
-    return parse_text(text)
+    parsed = parse_text(text)
+    for day in parsed["days"]:
+        for key, value in day.items():
+            if key in _DOCX_RICH_FIELDS:
+                continue
+            if isinstance(value, str):
+                day[key] = strip_bi_tags(value)
+            elif isinstance(value, list):
+                day[key] = [strip_bi_tags(v) for v in value]
+    return parsed
 
 
 def parse_docx_file(path):

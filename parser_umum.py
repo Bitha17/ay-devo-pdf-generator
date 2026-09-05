@@ -6,15 +6,17 @@ made of a day name, a theme, a bible reference, and three labelled sections
 (Konteks / Firman Kristus / Pertanyaan). It has no per-day calendar dates —
 the admin supplies the week's start date and days are dated in document order.
 
-Bold/italic runs in Konteks, Firman Kristus and Pertanyaan are preserved as
-inline <b>/<i> tags — the same convention the AY .txt uses — so both the PDF
+Bold/italic runs in Konteks and Firman Kristus are preserved as inline
+<b>/<i> tags — the same convention the AY .txt uses — so both the PDF
 (reportlab's Paragraph markup) and the web view (via the `markup` filter)
-render them.
+render them. Pertanyaan (and every other field) is a short structured line
+where inline formatting isn't meaningful, so it's kept plain even if it was
+formatted in the source doc.
 """
 from datetime import timedelta
 
 from content import DAY_NAMES_ID, ID_MONTHS_NAME, format_id_date, format_period
-from docx_utils import extract_docx_paragraphs
+from docx_utils import extract_docx_paragraphs, strip_bi_tags
 
 _DAY_NAMES_LOWER = {d.lower() for d in DAY_NAMES_ID}
 _HEADINGS = {"konteks", "firman kristus", "pertanyaan"}
@@ -71,7 +73,7 @@ def _parse_day_block(block, day_date):
         i += 1
     i += 1
     questions_text, i = _collect_until(lines, i, _HEADINGS)
-    questions = [q for q in questions_text.split("\n") if q.strip()]
+    questions = [strip_bi_tags(q) for q in questions_text.split("\n") if q.strip()]
 
     return {
         "date": format_id_date(day_date, block[0]["plain"]),

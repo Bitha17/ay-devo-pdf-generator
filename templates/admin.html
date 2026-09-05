@@ -57,10 +57,13 @@ ________________</pre>
   <code>&lt;b&gt;bold&lt;/b&gt;</code>, <code>&lt;i&gt;italic&lt;/i&gt;</code>,
   or <code>&lt;br&gt;</code> — they render in both the PDF and the web view.</p>
   <p><strong>In a .docx file</strong>, skip the tags — just select text and use
-  Word's normal Bold/Italic formatting, and it carries through automatically.
-  Only keep the field labels themselves (<code>THEME:</code>,
-  <code>Segment 1:</code>, day headers, etc.) as plain, unformatted text, since
-  those are matched literally.</p>
+  Word's normal Bold/Italic formatting. It only carries through for
+  <strong>Segment 1 (Konteks) and Segment 2 (Firman Kristus)</strong> — every
+  other field (theme, questions, aplikasi, M1/M3/M4, etc.) is kept plain even
+  if formatted, since those are short structured lines where it isn't
+  meaningful. Keep the field labels themselves (<code>THEME:</code>,
+  <code>Segment 1:</code>, day headers, etc.) as plain, unformatted text too,
+  since those are matched literally.</p>
 </details>
 
 <form class="formcard" method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data">
