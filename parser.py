@@ -3,6 +3,13 @@ import re
 
 DAYS_PATTERN = r"(?:Minggu|Senin|Selasa|Rabu|Kamis|Jumat|Sabtu),\s+\d{1,2}\s+\w+\s+\d{4}"
 
+# Looser than DAYS_PATTERN — just a day name starting its own line, whether
+# or not a full date follows. Used only to find chunk boundaries, so an
+# incomplete/placeholder day header (e.g. an unfinished "Sabtu, 2026 -"
+# template) still splits off its own chunk instead of bleeding into the
+# previous day's fields; DAYS_PATTERN then decides which chunks are real.
+_DAY_NAME_LINE_RE = r"^(?:Minggu|Senin|Selasa|Rabu|Kamis|Jumat|Sabtu),"
+
 
 # ----------------------------
 # Helpers
@@ -40,14 +47,12 @@ def extract_week_info(text):
 # Split into days
 # ----------------------------
 def split_days(text):
-    pattern = rf"(?={DAYS_PATTERN})"
     day_re = re.compile(DAYS_PATTERN)
-    chunks = re.split(pattern, text)
-    # The chunk before the first real day header is whatever came before it
-    # (the week/month/period header, normally dropped via the underscore-
-    # separator strip in parse_text) — keep only chunks that actually start
-    # with a day header, so a missing separator can't leak that header text
-    # in as a bogus extra "day".
+    chunks = re.split(rf"(?={_DAY_NAME_LINE_RE})", text, flags=re.MULTILINE)
+    # Keep only chunks whose header is a real, complete day date — drops the
+    # week/month/period header (when a separator is missing) and any
+    # incomplete/placeholder day header, without letting either bleed into
+    # an adjacent real day's fields.
     return [c.strip() for c in chunks if c.strip() and day_re.match(c.strip())]
 
 
@@ -110,7 +115,7 @@ def parse_day(day_text):
 
 
     data["m3"] = extract(r"M3: Yang saya akan lakukan setelah menerima Firman Kristus ini adalah…\s*(.*?)(?=M4:|$)", full_text)
-    data["m4"] = extract(r"M4:\s*(.*?)(?=____)", full_text)
+    data["m4"] = extract(r"M4:\s*(.*?)(?=____|$)", full_text)
 
     return data
 
@@ -127,7 +132,10 @@ def parse_text(text):
         text = parts[1]
 
     days_raw = split_days(text)
-    days = [parse_day(day) for day in days_raw]
+    # split_days should already guarantee every chunk has a real date, but
+    # skip anything that slips through without one anyway (blank/malformed
+    # day header), the same way a .txt source never produces such a day.
+    days = [d for d in (parse_day(day) for day in days_raw) if d.get("date")]
 
     return {
         "week": week,
@@ -161,7 +169,7 @@ _STRUCTURAL_LINE_RE = re.compile(
     r"^(?:_{3,}"
     r"|(?:THEME|Ayat Bacaan|M1|Key Message|Pertanyaan Perenungan Ayat"
     r"|M2|Segment 1|Segment 2|Aplikasi|M3|M4)\s*:"
-    rf"|{DAYS_PATTERN})"
+    rf"|{_DAY_NAME_LINE_RE})"
 )
 
 
