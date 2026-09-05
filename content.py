@@ -48,3 +48,32 @@ def extract_title(raw_text):
             return line.split(" - ", 1)[1].strip()
         return ""
     return ""
+
+
+ID_MONTHS_NAME = {v: k.capitalize() for k, v in ID_MONTHS.items()}
+
+DAY_NAMES_ID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+
+
+def format_id_date(d, day_name=None):
+    """date(2026, 9, 7) -> '7 September 2026' (or 'Senin, 7 September 2026'
+    when day_name is given), matching the AY parser's date field format."""
+    text = f"{d.day} {ID_MONTHS_NAME[d.month]} {d.year}"
+    return f"{day_name}, {text}" if day_name else text
+
+
+def format_period(start, end):
+    """Two dates -> the AY-style period string, e.g. '7-13 September 2026',
+    '29 September - 5 Oktober 2026', or '29 Desember 2026 - 4 Januari 2027'."""
+    if start.year == end.year:
+        if start.month == end.month:
+            return f"{start.day}-{end.day} {ID_MONTHS_NAME[start.month]} {start.year}"
+        return (f"{start.day} {ID_MONTHS_NAME[start.month]} - "
+                f"{end.day} {ID_MONTHS_NAME[end.month]} {start.year}")
+    return (f"{start.day} {ID_MONTHS_NAME[start.month]} {start.year} - "
+            f"{end.day} {ID_MONTHS_NAME[end.month]} {end.year}")
+
+
+def make_slug_umum(start_date):
+    """Stable URL slug for a Umum week, keyed by its start date."""
+    return f"umum-{start_date.isoformat()}"

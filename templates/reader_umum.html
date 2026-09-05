@@ -1,0 +1,166 @@
+{% extends "base_umum.html" %}
+{% set d = dev.data %}
+{% block title %}Meditasi Firman | {{ dev.title or dev.period }}{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <div class="period">{{ dev.period }}</div>
+  <h1>{{ dev.title or d.days[0].theme }}</h1>
+  {% if not is_published(dev) %}<div class="week">⏳ Preview — not yet published</div>{% endif %}
+</div>
+
+<div class="viewtoggle" id="viewtoggle">
+  <button data-view="web" class="active">📖 Web</button>
+  <button data-view="pdf">📄 PDF</button>
+</div>
+
+<div id="webview">
+<div class="daynav" id="daynav">
+  {% for day in d.days %}
+    <button data-day="{{ loop.index0 }}" class="{% if loop.index0 == active_index %}active{% endif %}">
+      {{ day.date.split(',')[0] }}
+    </button>
+  {% endfor %}
+</div>
+
+{% for day in d.days %}
+<div class="day {% if loop.index0 == active_index %}active{% endif %}" data-day="{{ loop.index0 }}">
+  <div class="card">
+    <div class="daymeta">{{ day.date }}</div>
+    <div class="theme">{{ day.theme }}</div>
+    {% if day.verse %}<button type="button" class="verse versebtn" data-ref="{{ day.verse }}"
+        title="Ketuk untuk baca ayat">📖 {{ day.verse }}</button>{% endif %}
+
+    {% if day.context %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='K.png') }}" alt="">Konteks</h3>
+      {% for para in day.context.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if day.firman_kristus %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='FK.png') }}" alt="">Firman Kristus</h3>
+      {% for para in day.firman_kristus.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    {% if day.questions %}
+    <div class="section">
+      <h3><img src="{{ url_for('asset_icon', name='PP.png') }}" alt="">Pertanyaan</h3>
+      <ol>{% for q in day.questions %}<li>{{ q | markup }}</li>{% endfor %}</ol>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="actions">
+  <a class="btn" href="{{ url_for('archive_umum') }}">🗂 Past weeks</a>
+</div>
+</div><!-- /webview -->
+
+<div id="verseSheet" class="versesheet" hidden>
+  <div class="versesheet-backdrop" data-close></div>
+  <div class="versesheet-panel">
+    <div class="versesheet-head">
+      <strong id="verseTitle"></strong>
+      <select id="verseVersion" class="verseversion" aria-label="Versi Alkitab"></select>
+      <button type="button" class="versesheet-close" data-close aria-label="Tutup">✕</button>
+    </div>
+    <div id="verseBody" class="versesheet-body"></div>
+  </div>
+</div>
+
+<div id="pdfview" hidden>
+  <div id="pdfLoading" class="pdfloading" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    Loading preview… please wait.
+  </div>
+  <div id="pdfpages" class="pdfpages"></div>
+  <p class="pdffallback">
+    PDF not loading?
+    <a href="{{ url_for('devotion_umum_pdf', slug=dev.slug) }}" target="_blank">Open it in a new tab</a>.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='bible.js') }}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  var nav = document.getElementById("daynav");
+  var days = document.querySelectorAll(".day");
+
+  var activeBtn = nav.querySelector("button.active");
+  if (activeBtn) {
+    nav.scrollLeft = activeBtn.offsetLeft - (nav.clientWidth - activeBtn.clientWidth) / 2;
+  }
+
+  nav.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    var i = btn.dataset.day;
+    nav.querySelectorAll("button").forEach(function (b) { b.classList.toggle("active", b === btn); });
+    days.forEach(function (day) { day.classList.toggle("active", day.dataset.day === i); });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  var vt = document.getElementById("viewtoggle");
+  var webview = document.getElementById("webview");
+  var pdfview = document.getElementById("pdfview");
+  var pdfpages = document.getElementById("pdfpages");
+  var pdfLoading = document.getElementById("pdfLoading");
+  var pdfUrl = "{{ url_for('devotion_umum_pdf', slug=dev.slug) }}";
+  var pdfLoaded = false;
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  function renderPage(pdf, num, canvas, cssWidth) {
+    return pdf.getPage(num).then(function (page) {
+      var dpr = window.devicePixelRatio || 1;
+      var base = page.getViewport({ scale: 1 });
+      var vp = page.getViewport({ scale: (cssWidth / base.width) * dpr });
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      canvas.style.width = "100%";
+      return page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    });
+  }
+
+  function renderPdf() {
+    if (pdfLoaded) return;
+    pdfLoaded = true;
+    pdfLoading.hidden = false;
+    var cssWidth = pdfpages.clientWidth || pdfview.clientWidth || window.innerWidth - 32;
+    pdfjsLib.getDocument(pdfUrl).promise.then(function (pdf) {
+      var first = null;
+      for (var n = 1; n <= pdf.numPages; n++) {
+        var canvas = document.createElement("canvas");
+        canvas.className = "pdfpage";
+        pdfpages.appendChild(canvas);
+        var p = renderPage(pdf, n, canvas, cssWidth);
+        if (n === 1) first = p;
+      }
+      (first || Promise.resolve()).then(function () { pdfLoading.hidden = true; });
+    }).catch(function () {
+      pdfLoaded = false;
+      pdfLoading.hidden = true;
+      pdfpages.innerHTML =
+        '<p class="pdffallback">Couldn’t render the PDF here — use the link below.</p>';
+    });
+  }
+
+  vt.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    var pdf = btn.dataset.view === "pdf";
+    vt.querySelectorAll("button").forEach(function (b) { b.classList.toggle("active", b === btn); });
+    webview.hidden = pdf;
+    pdfview.hidden = !pdf;
+    if (pdf) renderPdf();
+    window.scrollTo({ top: 0 });
+  });
+</script>
+{% endblock %}

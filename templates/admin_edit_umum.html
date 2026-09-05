@@ -1,0 +1,49 @@
+{% extends "base_umum.html" %}
+{% block title %}Edit · {{ dev.title or dev.slug }}{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Edit devotion (Umum)</h2>
+  <a class="iconbtn" href="{{ url_for('admin_umum') }}">← Back</a>
+</div>
+<p class="sub" style="color:var(--muted);font-size:13px">
+  <code>/umum/d/{{ dev.slug }}</code> · {{ dev.period }}
+</p>
+
+<form class="formcard" method="post" action="{{ url_for('admin_umum_edit_save', slug=dev.slug) }}"
+      enctype="multipart/form-data">
+
+  <label>Title</label>
+  <input type="text" name="title" value="{{ dev.title or '' }}">
+
+  <label>Publish at (WIB)</label>
+  <input type="datetime-local" name="publish_at" value="{{ publish_local }}">
+
+  <label>Replace devotion text (.docx) — optional</label>
+  <input type="file" name="docx" accept=".docx">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Leave empty to keep the current text. Re-uploading regenerates the PDF and needs the
+    week start date below.
+  </p>
+
+  <label>Week start date (only needed if replacing the .docx above)</label>
+  <input type="date" name="start_date">
+
+  <label>Replace PDF cover — optional</label>
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg"
+         data-preview="coverPreview" data-preview-type="image">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Leave empty to keep the current cover. Replacing regenerates the PDF.
+  </p>
+  <img id="coverPreview" class="filepreview imgpreview" style="display:none" alt="">
+
+  <div class="actions">
+    <button class="btn primary" type="submit" data-busy="Menyimpan perubahan…">Save changes</button>
+    <a class="btn" href="{{ url_for('devotion_umum', slug=dev.slug) }}" target="_blank">Preview</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='preview.js') }}"></script>
+<script src="{{ url_for('static', filename='admin.js') }}"></script>
+{% endblock %}

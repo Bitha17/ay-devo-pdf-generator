@@ -46,14 +46,17 @@ def init_db():
                 pdf_path      TEXT,            -- absolute path on disk
                 image_path    TEXT,            -- PDF cover (mandatory)
                 hero_path     TEXT,            -- web hero banner (optional)
-                created_at    TEXT NOT NULL    -- UTC ISO-8601
+                created_at    TEXT NOT NULL,   -- UTC ISO-8601
+                division      TEXT NOT NULL DEFAULT 'ay'
             )
             """
         )
-        # Migrate older DBs that predate hero_path.
+        # Migrate older DBs that predate hero_path / division.
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(devotions)")]
         if "hero_path" not in cols:
             conn.execute("ALTER TABLE devotions ADD COLUMN hero_path TEXT")
+        if "division" not in cols:
+            conn.execute("ALTER TABLE devotions ADD COLUMN division TEXT NOT NULL DEFAULT 'ay'")
 
 
 def _now_iso():
@@ -80,7 +83,7 @@ def week_start(dev):
 
 
 def upsert_devotion(slug, title, week, month, period, publish_at_utc,
-                    parsed, pdf_path, image_path, hero_path):
+                    parsed, pdf_path, image_path, hero_path, division="ay"):
     """Insert or replace a devotion by slug. publish_at_utc is a tz-aware
     datetime; parsed is the dict from parse_txt_file."""
     with _connect() as conn:
@@ -88,8 +91,8 @@ def upsert_devotion(slug, title, week, month, period, publish_at_utc,
             """
             INSERT INTO devotions
                 (slug, title, week, month, period, publish_at,
-                 parsed_json, pdf_path, image_path, hero_path, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 parsed_json, pdf_path, image_path, hero_path, created_at, division)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(slug) DO UPDATE SET
                 title=excluded.title, week=excluded.week, month=excluded.month,
                 period=excluded.period, publish_at=excluded.publish_at,
@@ -99,16 +102,16 @@ def upsert_devotion(slug, title, week, month, period, publish_at_utc,
             (slug, title, week, month, period,
              publish_at_utc.astimezone(timezone.utc).isoformat(),
              json.dumps(parsed, ensure_ascii=False), pdf_path, image_path,
-             hero_path, _now_iso()),
+             hero_path, _now_iso(), division),
         )
 
 
-def get_latest_published():
+def get_latest_published(division="ay"):
     with _connect() as conn:
         row = conn.execute(
-            "SELECT * FROM devotions WHERE publish_at <= ? "
+            "SELECT * FROM devotions WHERE division = ? AND publish_at <= ? "
             "ORDER BY publish_at DESC LIMIT 1",
-            (_now_iso(),),
+            (division, _now_iso()),
         ).fetchone()
     return _row_to_dict(row)
 
@@ -127,21 +130,24 @@ def get_by_slug(slug, include_unpublished=False):
     return _row_to_dict(row)
 
 
-def list_published():
+def list_published(division="ay"):
     """Published devotions, newest week first (by the devotion's own date)."""
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM devotions WHERE publish_at <= ?", (_now_iso(),)
+            "SELECT * FROM devotions WHERE division = ? AND publish_at <= ?",
+            (division, _now_iso()),
         ).fetchall()
     devs = [_row_to_dict(r) for r in rows]
     devs.sort(key=week_start, reverse=True)
     return devs
 
 
-def list_all():
-    """Admin view: every devotion, newest week first."""
+def list_all(division="ay"):
+    """Admin view: every devotion in a division, newest week first."""
     with _connect() as conn:
-        rows = conn.execute("SELECT * FROM devotions").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM devotions WHERE division = ?", (division,)
+        ).fetchall()
     devs = [_row_to_dict(r) for r in rows]
     devs.sort(key=week_start, reverse=True)
     return devs

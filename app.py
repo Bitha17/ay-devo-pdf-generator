@@ -15,8 +15,10 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from parser import parse_txt_file
+from parser_umum import parse_docx_file
 from pdf import generate_pdf, generate_pdf_from_data
-from content import make_slug, extract_title, parse_id_date
+from pdf_umum import generate_pdf_from_data_umum
+from content import make_slug, make_slug_umum, extract_title, parse_id_date
 import db
 
 # Secrets come from the environment (set them in the WSGI file on PythonAnywhere).
@@ -191,6 +193,44 @@ def devotion_pdf(slug):
     admin = session.get("admin")
     dev = db.get_by_slug(slug, include_unpublished=admin)
     if not dev or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
+        abort(404)
+    return send_file(dev["pdf_path"], mimetype="application/pdf")
+
+
+# ---------------------------------------------------------------- reader (Umum)
+@app.route("/umum")
+def index_umum():
+    published = db.list_published(division="umum")
+    dev = pick_current(published)
+    if not dev:
+        return render_template("empty_umum.html")
+    return render_template(
+        "reader_umum.html", dev=dev, archive=published, is_latest=True,
+        active_index=active_day_index(dev),
+    )
+
+
+@app.route("/umum/d/<slug>")
+def devotion_umum(slug):
+    dev = db.get_by_slug(slug, include_unpublished=session.get("admin"))
+    if not dev or dev["division"] != "umum":
+        abort(404)
+    return render_template(
+        "reader_umum.html", dev=dev, archive=db.list_published(division="umum"),
+        is_latest=False, active_index=active_day_index(dev),
+    )
+
+
+@app.route("/umum/archive")
+def archive_umum():
+    return render_template("archive_umum.html", archive=db.list_published(division="umum"))
+
+
+@app.route("/umum/d/<slug>/pdf")
+def devotion_umum_pdf(slug):
+    admin = session.get("admin")
+    dev = db.get_by_slug(slug, include_unpublished=admin)
+    if not dev or dev["division"] != "umum" or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
         abort(404)
     return send_file(dev["pdf_path"], mimetype="application/pdf")
 
@@ -405,6 +445,150 @@ def admin_regenerate():
 @require_admin
 def admin_background_current():
     return send_file(current_bg_path())
+
+
+# ------------------------------------------------------------ admin (Umum)
+@app.route("/admin/umum")
+@require_admin
+def admin_umum():
+    return render_template("admin_umum.html", devotions=db.list_all(division="umum"))
+
+
+@app.route("/admin/umum/upload", methods=["POST"])
+@require_admin
+def admin_umum_upload():
+    docx_file = request.files["docx"]
+    pdf_cover = request.files["pdf_cover"]   # mandatory: PDF first page
+    start_date_str = request.form.get("start_date", "").strip()
+    publish_local = request.form.get("publish_at", "").strip()
+
+    if not start_date_str:
+        flash("Week start date is required.")
+        return redirect(url_for("admin_umum"))
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+
+    docx_path = os.path.join(db.UPLOAD_DIR, secure_filename(docx_file.filename))
+    docx_file.save(docx_path)
+
+    parsed = parse_docx_file(docx_path, start_date)
+    slug = make_slug_umum(start_date)
+
+    title = request.form.get("title", "").strip() or parsed["title"]
+
+    image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(pdf_cover.filename))
+    pdf_cover.save(image_path)
+
+    pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+    pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_buffer.getvalue())
+
+    if publish_local:
+        publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
+    else:
+        publish_at = datetime.now(timezone.utc)
+
+    db.upsert_devotion(
+        slug=slug, title=title, week=parsed["week"], month=parsed["month"],
+        period=parsed["period"], publish_at_utc=publish_at, parsed=parsed,
+        pdf_path=pdf_path, image_path=image_path, hero_path=None,
+        division="umum",
+    )
+
+    try:
+        os.remove(docx_path)
+    except OSError:
+        pass
+    flash(f"Saved “{title}” → publishes {to_local(publish_at.astimezone(timezone.utc).isoformat()):%d %b %Y, %H:%M} WIB")
+    return redirect(url_for("admin_umum"))
+
+
+@app.route("/admin/umum/edit/<slug>")
+@require_admin
+def admin_umum_edit(slug):
+    dev = db.get_by_slug(slug, include_unpublished=True)
+    if not dev or dev["division"] != "umum":
+        abort(404)
+    publish_local = to_local(dev["publish_at"]).strftime("%Y-%m-%dT%H:%M")
+    return render_template("admin_edit_umum.html", dev=dev, publish_local=publish_local)
+
+
+@app.route("/admin/umum/edit/<slug>", methods=["POST"])
+@require_admin
+def admin_umum_edit_save(slug):
+    dev = db.get_by_slug(slug, include_unpublished=True)
+    if not dev or dev["division"] != "umum":
+        abort(404)
+
+    parsed = dev["data"]
+    image_path = dev["image_path"]
+    week, month, period = dev["week"], dev["month"], dev["period"]
+    regen_pdf = False
+
+    # A replacement .docx needs the original (or a corrected) start date.
+    start_date_str = request.form.get("start_date", "").strip()
+    docx_file = request.files.get("docx")
+    if docx_file and docx_file.filename:
+        if not start_date_str:
+            flash("Week start date is required to re-parse a replacement .docx.")
+            return redirect(url_for("admin_umum_edit", slug=slug))
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        docx_path = os.path.join(db.UPLOAD_DIR, f"{slug}_edit_" + secure_filename(docx_file.filename))
+        docx_file.save(docx_path)
+        parsed = parse_docx_file(docx_path, start_date)
+        week, month, period = parsed["week"], parsed["month"], parsed["period"]
+        _delete_file(docx_path)
+        regen_pdf = True
+
+    cover_file = request.files.get("pdf_cover")
+    if cover_file and cover_file.filename:
+        if image_path:
+            _delete_file(image_path)
+        image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(cover_file.filename))
+        cover_file.save(image_path)
+        regen_pdf = True
+
+    title = request.form.get("title", dev["title"]).strip()
+
+    publish_local = request.form.get("publish_at", "").strip()
+    if publish_local:
+        publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
+    else:
+        publish_at = datetime.fromisoformat(dev["publish_at"])
+
+    pdf_path = dev["pdf_path"] or os.path.join(db.PDF_DIR, f"{slug}.pdf")
+    if regen_pdf:
+        buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+        with open(pdf_path, "wb") as f:
+            f.write(buffer.getvalue())
+
+    db.upsert_devotion(
+        slug=slug, title=title, week=week, month=month, period=period,
+        publish_at_utc=publish_at, parsed=parsed, pdf_path=pdf_path,
+        image_path=image_path, hero_path=None, division="umum",
+    )
+    flash(f"Updated “{title or slug}”.")
+    return redirect(url_for("admin_umum"))
+
+
+@app.route("/admin/umum/delete/<slug>", methods=["POST"])
+@require_admin
+def admin_umum_delete(slug):
+    db.delete_by_slug(slug)
+    flash(f"Deleted {slug}.")
+    return redirect(url_for("admin_umum"))
+
+
+@app.route("/admin/umum/download/<slug>")
+@require_admin
+def admin_umum_download(slug):
+    dev = db.get_by_slug(slug, include_unpublished=True)
+    if not dev or dev["division"] != "umum" or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
+        abort(404)
+    return send_file(
+        dev["pdf_path"], mimetype="application/pdf", as_attachment=True,
+        download_name=f"{dev['title']} - Umum - {dev['period']}.pdf",
+    )
 
 
 if __name__ == "__main__":

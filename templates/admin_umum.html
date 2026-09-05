@@ -1,0 +1,78 @@
+{% extends "base_umum.html" %}
+{% block title %}Admin · Meditasi Firman{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Publish a devotion (Umum)</h2>
+  <a class="iconbtn" href="{{ url_for('admin') }}">AY admin</a>
+  <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
+</div>
+
+<form class="formcard" method="post" action="{{ url_for('admin_umum_upload') }}" enctype="multipart/form-data">
+  <label>Devotion text (.docx)</label>
+  <input type="file" name="docx" accept=".docx" required>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    A title paragraph, then one block per day (day name, theme, bible reference,
+    Konteks, Firman Kristus, Pertanyaan).
+  </p>
+
+  <label>Week start date (the docx's first day)</label>
+  <input type="date" name="start_date" required>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    The docx has no calendar dates of its own — each day is dated sequentially
+    from this date, in document order.
+  </p>
+
+  <label>Title (optional)</label>
+  <input type="text" name="title" placeholder="Leave blank to use the title from the docx">
+
+  <label>PDF cover image (required)</label>
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg" required
+         data-preview="coverPreview" data-preview-type="image">
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Used as the PDF's first page as-is (title text already baked into the image).
+  </p>
+  <img id="coverPreview" class="filepreview imgpreview" style="display:none" alt="">
+
+  <label>Publish at (WIB) — leave blank to publish now</label>
+  <input type="datetime-local" name="publish_at">
+
+  <div class="actions"><button class="btn primary" type="submit" data-busy="Mengunggah &amp; membuat PDF…">Upload &amp; generate</button></div>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    The slug is derived from the start date. Re-uploading the same start date overwrites it.
+  </p>
+</form>
+
+<h3 style="margin-top:28px">All devotions</h3>
+{% if not devotions %}
+  <p style="color:var(--muted)">Nothing uploaded yet.</p>
+{% else %}
+<ul class="list">
+  {% for dev in devotions %}
+  <li>
+    <div style="flex:1">
+      <a class="title" href="{{ url_for('devotion_umum', slug=dev.slug) }}">{{ dev.title or dev.period }}</a>
+      <div class="sub">/umum/d/{{ dev.slug }} · publishes {{ to_local(dev.publish_at).strftime('%d %b %Y, %H:%M') }} WIB</div>
+    </div>
+    {% if is_published(dev) %}
+      <span class="badge live">LIVE</span>
+    {% else %}
+      <span class="badge scheduled">SCHEDULED</span>
+    {% endif %}
+    <a class="iconbtn" href="{{ url_for('admin_umum_edit', slug=dev.slug) }}">Edit</a>
+    <a class="iconbtn" href="{{ url_for('devotion_umum', slug=dev.slug) }}" target="_blank">Preview</a>
+    <a class="iconbtn" href="{{ url_for('devotion_umum_pdf', slug=dev.slug) }}" target="_blank">PDF</a>
+    <a class="iconbtn" href="{{ url_for('admin_umum_download', slug=dev.slug) }}">Download</a>
+    <form method="post" action="{{ url_for('admin_umum_delete', slug=dev.slug) }}"
+          onsubmit="return confirm('Delete {{ dev.slug }}?')">
+      <button class="danger" type="submit" data-busy="Menghapus…">Delete</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='preview.js') }}"></script>
+<script src="{{ url_for('static', filename='admin.js') }}"></script>
+{% endblock %}

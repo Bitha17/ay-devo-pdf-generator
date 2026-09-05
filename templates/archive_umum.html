@@ -1,0 +1,20 @@
+{% extends "base_umum.html" %}
+{% block title %}Archive · Meditasi Firman{% endblock %}
+{% block content %}
+<h2 style="font-family:'Poynter',serif;font-weight:400;">Past devotions</h2>
+{% if not archive %}
+  <p style="color:var(--muted)">No devotions published yet.</p>
+{% else %}
+<ul class="list">
+  {% for dev in archive %}
+  <li>
+    <a class="title" href="{{ url_for('devotion_umum', slug=dev.slug) }}" style="flex:1">
+      {{ dev.title or dev.period }}
+      <span class="sub" style="display:block">{{ dev.period }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+<div class="actions"><a class="btn primary" href="{{ url_for('index_umum') }}">← Latest devotion</a></div>
+{% endblock %}
