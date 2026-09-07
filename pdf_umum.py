@@ -35,12 +35,12 @@ pdfmetrics.registerFontFamily(
 )
 
 HEADING_STYLE = ParagraphStyle(
-    name="UmumHeading", fontName="UmumBody-Bold", fontSize=16, leading=20,
+    name="UmumHeading", fontName="UmumBody-Bold", fontSize=20, leading=24,
     textColor=colors.HexColor("#1A1A1A"),
 )
 
 DAYVERSE_STYLE = ParagraphStyle(
-    name="UmumDayVerse", fontName="UmumBody-Bold", fontSize=12, leading=16,
+    name="UmumDayVerse", fontName="UmumBody-Bold", fontSize=14, leading=18,
     textColor=colors.HexColor("#1A1A1A"),
 )
 
@@ -49,19 +49,19 @@ DAYVERSE_RIGHT_STYLE = ParagraphStyle(
 )
 
 SECTION_LABEL_STYLE = ParagraphStyle(
-    name="UmumSectionLabel", fontName="UmumBody-Bold", fontSize=12, leading=16,
-    textColor=colors.HexColor("#1A1A1A"), spaceBefore=10, spaceAfter=6,
+    name="UmumSectionLabel", fontName="UmumBody-Bold", fontSize=15, leading=19,
+    textColor=colors.HexColor("#1A1A1A"), spaceBefore=12, spaceAfter=8,
 )
 
 BODY_STYLE = ParagraphStyle(
-    name="UmumBody", fontName="UmumBody", fontSize=11, leading=15,
-    alignment=TA_JUSTIFY, textColor=colors.HexColor("#1A1A1A"), spaceAfter=8,
+    name="UmumBody", fontName="UmumBody", fontSize=14, leading=20,
+    alignment=TA_JUSTIFY, textColor=colors.HexColor("#1A1A1A"), spaceAfter=10,
 )
 
 QUESTION_STYLE = ParagraphStyle(
-    name="UmumQuestion", fontName="UmumBody", fontSize=11, leading=15,
+    name="UmumQuestion", fontName="UmumBody", fontSize=14, leading=20,
     alignment=TA_JUSTIFY, textColor=colors.HexColor("#1A1A1A"),
-    leftIndent=14, firstLineIndent=-14, spaceAfter=6,
+    leftIndent=16, firstLineIndent=-16, spaceAfter=8,
 )
 
 
@@ -110,12 +110,9 @@ def generate_pdf_from_data_umum(data, cover_path):
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1A1A1A")))
         story.append(Spacer(1, 14))
 
-        date_display = day["date"].upper()
-        if day.get("author"):
-            date_display = f"{date_display} · {day['author'].upper()}"
         dayverse_table = Table(
             [[
-                Paragraph(date_display, DAYVERSE_STYLE),
+                Paragraph(day["date"].upper(), DAYVERSE_STYLE),
                 Paragraph(day["verse"].upper(), DAYVERSE_RIGHT_STYLE),
             ]],
             colWidths=[doc.width * 0.6, doc.width * 0.4],
