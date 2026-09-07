@@ -2,7 +2,7 @@ import os
 import io
 import re
 import hmac
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import wraps
 from zoneinfo import ZoneInfo
 
@@ -476,17 +476,18 @@ def admin_umum_upload():
     pdf_cover = request.files["pdf_cover"]   # mandatory: PDF first page
     start_date_str = request.form.get("start_date", "").strip()
     publish_local = request.form.get("publish_at", "").strip()
-
-    if not start_date_str:
-        flash("Week start date is required.")
-        return redirect(url_for("admin_umum"))
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
 
     docx_path = os.path.join(db.UPLOAD_DIR, secure_filename(docx_file.filename))
     docx_file.save(docx_path)
 
-    parsed = parse_docx_file(docx_path, start_date)
-    slug = make_slug_umum(start_date)
+    try:
+        parsed = parse_docx_file(docx_path, start_date)
+    except ValueError as e:
+        _delete_file(docx_path)
+        flash(str(e))
+        return redirect(url_for("admin_umum"))
+    slug = make_slug_umum(date.fromisoformat(parsed["start_date"]))
 
     title = request.form.get("title", "").strip() or parsed["title"]
 
@@ -540,17 +541,19 @@ def admin_umum_edit_save(slug):
     week, month, period = dev["week"], dev["month"], dev["period"]
     regen_pdf = False
 
-    # A replacement .docx needs the original (or a corrected) start date.
+    # A replacement .docx without its own per-day dates needs a start date.
     start_date_str = request.form.get("start_date", "").strip()
     docx_file = request.files.get("docx")
     if docx_file and docx_file.filename:
-        if not start_date_str:
-            flash("Week start date is required to re-parse a replacement .docx.")
-            return redirect(url_for("admin_umum_edit", slug=slug))
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
         docx_path = os.path.join(db.UPLOAD_DIR, f"{slug}_edit_" + secure_filename(docx_file.filename))
         docx_file.save(docx_path)
-        parsed = parse_docx_file(docx_path, start_date)
+        try:
+            parsed = parse_docx_file(docx_path, start_date)
+        except ValueError as e:
+            _delete_file(docx_path)
+            flash(str(e))
+            return redirect(url_for("admin_umum_edit", slug=slug))
         week, month, period = parsed["week"], parsed["month"], parsed["period"]
         _delete_file(docx_path)
         regen_pdf = True

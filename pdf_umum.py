@@ -110,9 +110,12 @@ def generate_pdf_from_data_umum(data, cover_path):
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1A1A1A")))
         story.append(Spacer(1, 14))
 
+        date_display = day["date"].upper()
+        if day.get("author"):
+            date_display = f"{date_display} · {day['author'].upper()}"
         dayverse_table = Table(
             [[
-                Paragraph(day["date"].upper(), DAYVERSE_STYLE),
+                Paragraph(date_display, DAYVERSE_STYLE),
                 Paragraph(day["verse"].upper(), DAYVERSE_RIGHT_STYLE),
             ]],
             colWidths=[doc.width * 0.6, doc.width * 0.4],

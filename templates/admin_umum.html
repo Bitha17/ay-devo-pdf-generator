@@ -35,9 +35,35 @@ Selasa                                ← next day, same shape
   Selasa, Rabu, Kamis, Jumat, Sabtu, Minggu</strong>. Each question is its own
   paragraph (no manual numbering — the PDF and web view number them
   automatically). Blank lines between paragraphs are fine and ignored.</p>
-  <p>Since the docx has no calendar dates, the <strong>Week start date</strong>
-  field below is required — it's assigned to the first day block, and the rest
-  follow in order.</p>
+  <p>Since this docx has no calendar dates of its own, the <strong>Week start
+  date</strong> field below is required — it's assigned to the first day
+  block, and the rest follow in order.</p>
+
+  <h4>Alternative: day headers with their own dates</h4>
+  <p>A day header can instead be written as <code>Senin | 7 September 2026</code>
+  — each day carries its own date, so the <strong>Week start date</strong>
+  field can be left blank. This style is often written with a one-line author
+  byline right before each day header (e.g. a name), isolated by a blank line
+  on both sides; it's captured automatically and doesn't need a dedicated
+  title paragraph — since there's no title line in this style, use the
+  <strong>Title</strong> field below to set one.</p>
+  <pre>Thrasya                               ← that day's author (optional)
+Senin | 7 September 2026              ← day name + its own date
+Allah yang Layak Disembah
+Mazmur 96:1–9
+
+Konteks
+…
+
+Firman Kristus
+…
+
+Pertanyaan
+…
+
+Nadya
+Selasa | 8 September 2026
+…</pre>
 
   <h4>Inline formatting</h4>
   <p><strong>Bold</strong> and <em>italic</em> text applied in Word carries
@@ -56,10 +82,11 @@ Selasa                                ← next day, same shape
     Konteks, Firman Kristus, Pertanyaan).
   </p>
 
-  <label>Week start date (the docx's first day)</label>
-  <input type="date" name="start_date" required>
+  <label>Week start date (only if the docx's day headers have no dates of their own)</label>
+  <input type="date" name="start_date">
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
-    The docx has no calendar dates of its own — each day is dated sequentially
+    Leave blank if every day header already carries its own date (e.g. "Senin |
+    7 September 2026"). Otherwise required — each day is dated sequentially
     from this date, in document order.
   </p>
 

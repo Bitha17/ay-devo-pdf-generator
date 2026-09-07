@@ -30,32 +30,51 @@ def _run_is_on(rpr, tag):
     return val not in ("0", "false")
 
 
-def _paragraph_texts(p):
-    """A paragraph's plain text and its "rich" text with bold/italic runs
-    wrapped in <b>/<i> tags."""
+def _wrap(text, rpr):
+    if _run_is_on(rpr, "i"):
+        text = f"<i>{text}</i>"
+    if _run_is_on(rpr, "b"):
+        text = f"<b>{text}</b>"
+    return text
+
+
+def _paragraph_lines(p):
+    """A paragraph's text, split into one (plain, rich) pair per line — a
+    Word paragraph can itself contain manual line breaks (<w:br/>, a
+    "soft return" from Shift+Enter) rather than starting a new paragraph,
+    and those need to be treated the same as an actual paragraph break for
+    line-based structural matching (day headers, field labels, …)."""
+    lines = []
     plain_parts, rich_parts = [], []
     for r in p.iter(f"{_W}r"):
-        text = "".join(t.text or "" for t in r.iter(f"{_W}t"))
-        if not text:
-            continue
-        plain_parts.append(text)
         rpr = r.find(f"{_W}rPr")
-        wrapped = text
-        if _run_is_on(rpr, "i"):
-            wrapped = f"<i>{wrapped}</i>"
-        if _run_is_on(rpr, "b"):
-            wrapped = f"<b>{wrapped}</b>"
-        rich_parts.append(wrapped)
-    return "".join(plain_parts).strip(), "".join(rich_parts).strip()
+        for child in r:
+            tag = child.tag
+            if tag == f"{_W}t":
+                text = child.text or ""
+                if text:
+                    plain_parts.append(text)
+                    rich_parts.append(_wrap(text, rpr))
+            elif tag in (f"{_W}br", f"{_W}cr"):
+                lines.append(("".join(plain_parts).strip(), "".join(rich_parts).strip()))
+                plain_parts, rich_parts = [], []
+            elif tag == f"{_W}tab":
+                plain_parts.append("\t")
+                rich_parts.append("\t")
+    lines.append(("".join(plain_parts).strip(), "".join(rich_parts).strip()))
+    return lines
 
 
 def extract_docx_paragraphs(path):
     """Read a .docx and return one {"plain": ..., "rich": ...} dict per
-    paragraph (empty ones kept, so callers can use them as spacing cues)."""
+    line (empty ones kept, so callers can use them as spacing cues). A
+    Word paragraph normally produces one line; a paragraph containing
+    manual line breaks (Shift+Enter) produces one per line."""
     with zipfile.ZipFile(path) as z:
         xml = z.read("word/document.xml")
     root = ET.fromstring(xml)
     return [
-        dict(zip(("plain", "rich"), _paragraph_texts(p)))
+        {"plain": plain, "rich": rich}
         for p in root.iter(f"{_W}p")
+        for plain, rich in _paragraph_lines(p)
     ]
