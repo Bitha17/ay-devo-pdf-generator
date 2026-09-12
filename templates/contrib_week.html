@@ -1,40 +1,39 @@
 {% extends "base_umum.html" %}
 {% block title %}Week of {{ week.start_date }}{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;gap:12px">
-  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Week of {{ week.start_date }}</h2>
+<div class="contrib-heading">
+  <div><p class="eyebrow">Lead workspace</p><h2>Week of {{ week.start_date }}</h2></div>
   <a class="iconbtn" href="{{ url_for('contrib_dashboard') }}">← Weeks</a>
 </div>
 
-<p class="sub" style="color:var(--muted);font-size:13px">Leads can open and edit every assigned or unsubmitted draft below.</p>
-
 {% if week.published_slug %}
-  <p class="flash">Published — <a href="{{ url_for('devotion' if week.division == 'ay' else 'devotion_umum', slug=week.published_slug) }}" target="_blank">view it live</a>.
-  Republishing overwrites the same PDF/page.</p>
+  <p class="flash">Published — <a href="{{ url_for('devotion' if week.division == 'ay' else 'devotion_umum', slug=week.published_slug) }}" target="_blank">view it live</a>.</p>
+{% else %}
+  <p class="sub contrib-intro">Open any day to read, edit, or review it. Use the writer selector only to change ownership.</p>
 {% endif %}
 
-<ul class="list">
+<div class="week-day-grid">
   {% for d in days %}
-  <li style="flex-wrap:wrap">
-    <div style="flex:1;min-width:200px">
-      <a class="title" href="{{ url_for('contrib_day', draft_id=d.id) }}">{{ d.day_name }} — {{ d.theme or "untitled" }}</a>
-      <div class="sub">{{ d.date_str }}</div>
-      {% if d.review_notes %}<div class="sub" style="color:#d9534f">Note: {{ d.review_notes }}</div>{% endif %}
-    </div>
-    <span class="statuspill {{ d.status }}">{{ d.status.replace('_', ' ') }}</span>
-    <form method="post" action="{{ url_for('contrib_day_assign', draft_id=d.id) }}" style="display:flex;gap:6px;align-items:center">
-      <select name="writer_id" style="width:auto" onchange="this.form.submit()">
-        <option value="">— unassigned —</option>
-        {% for w in writers %}
-        <option value="{{ w.id }}" {% if d.assigned_to == w.id %}selected{% endif %}>{{ w.name }}</option>
-        {% endfor %}
+  <article class="week-day-card status-{{ d.status }}">
+    <a class="week-day-open" href="{{ url_for('contrib_day', draft_id=d.id) }}">
+      <span>{{ d.day_name }}</span>
+      <small>{{ d.date_str }}</small>
+      <strong>{{ d.theme or 'Untitled devotion' }}</strong>
+      <span class="statuspill {{ d.status }}">{{ d.status.replace('_', ' ') }}</span>
+      {% if d.review_notes %}<em>Feedback sent</em>{% endif %}
+    </a>
+    <form method="post" action="{{ url_for('contrib_day_assign', draft_id=d.id) }}" class="day-owner">
+      <label for="writer-{{ d.id }}">Writer</label>
+      <select id="writer-{{ d.id }}" name="writer_id" onchange="this.form.submit()">
+        <option value="">Unassigned</option>
+        {% for w in writers %}<option value="{{ w.id }}" {% if d.assigned_to == w.id %}selected{% endif %}>{{ w.name }}</option>{% endfor %}
       </select>
     </form>
-  </li>
+  </article>
   {% endfor %}
-</ul>
+</div>
 
 <div class="actions">
-  <a class="btn primary" href="{{ url_for('contrib_week_publish', week_id=week.id) }}">Publish week</a>
+  <a class="btn primary" href="{{ url_for('contrib_week_publish', week_id=week.id) }}">Check and publish week</a>
 </div>
 {% endblock %}

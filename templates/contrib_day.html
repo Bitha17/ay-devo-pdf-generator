@@ -1,11 +1,24 @@
 {% extends "base_umum.html" %}
 {% block title %}{{ draft.day_name }} — {{ draft.date_str }}{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;gap:12px">
-  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">{{ draft.day_name }}</h2>
+<div class="contrib-heading">
+  <div><p class="eyebrow">Week of {{ week.start_date }}</p><h2>{{ draft.day_name }}</h2></div>
   <span class="statuspill {{ draft.status }}">{{ draft.status.replace('_', ' ') }}</span>
 </div>
-<p class="sub" style="color:var(--muted)">{{ draft.date_str }}</p>
+<div class="day-page-tools">
+  <a class="iconbtn" href="{{ back_url }}">← {{ back_label }}</a>
+  <span>{{ draft.date_str }}</span>
+</div>
+
+{% if day_navigation | length > 1 %}
+<nav class="draft-day-nav" aria-label="Days in this week">
+  {% for item in day_navigation %}
+  <a href="{{ url_for('contrib_day', draft_id=item.id) }}" class="{% if item.id == draft.id %}active{% endif %} status-{{ item.status }}" {% if item.id == draft.id %}aria-current="page"{% endif %}>
+    <span>{{ item.day_name }}</span><small>{{ item.status.replace('_', ' ') }}</small>
+  </a>
+  {% endfor %}
+</nav>
+{% endif %}
 
 {% if draft.review_notes %}
 <div class="reviewnote"><strong>{% if draft.status == "changes_requested" %}Changes requested:{% else %}Lead note:{% endif %}</strong> {{ draft.review_notes }}</div>

@@ -952,12 +952,33 @@ def contrib_dashboard():
         weeks = db.list_weeks(division)
         for w in weeks:
             w["days"] = db.list_day_drafts(w["id"])
+            w["approved_count"] = sum(day["status"] == "approved" for day in w["days"])
+            w["submitted_count"] = sum(day["status"] == "submitted" for day in w["days"])
+            w["in_progress_count"] = sum(
+                day["status"] in ("draft", "changes_requested") for day in w["days"]
+            )
+            # Submission is the lead's most immediate review task. If there
+            # is none, open the first unfinished day so drafts stay visible.
+            w["next_day"] = next(
+                (day for day in w["days"] if day["status"] == "submitted"),
+                next((day for day in w["days"] if day["status"] != "approved"), None),
+            )
+        next_review_day = next(
+            (week["next_day"] for week in weeks if week["submitted_count"]), None
+        )
         return render_template(
             "contrib_lead.html", me=me, weeks=weeks, division=division,
+            next_review_day=next_review_day,
             writers=[c for c in db.list_contributors(division) if c["role"] == "writer"],
         )
     days = db.list_assigned_drafts(me["id"])
-    return render_template("contrib_writer.html", me=me, days=days, division=division)
+    next_day = next(
+        (day for day in days if day["status"] in ("changes_requested", "draft")),
+        next((day for day in days if day["status"] == "submitted"), None),
+    )
+    return render_template(
+        "contrib_writer.html", me=me, days=days, division=division, next_day=next_day,
+    )
 
 
 @app.route("/contrib/weeks/new", methods=["POST"])
@@ -1149,9 +1170,24 @@ def contrib_day(draft_id):
 
         return redirect(url_for("contrib_day", draft_id=draft_id))
 
+    if is_lead:
+        day_navigation = db.list_day_drafts(week["id"])
+        back_url = url_for("contrib_week", week_id=week["id"])
+        back_label = "Week overview"
+    else:
+        # Writers can navigate only between their own assignments in this
+        # devotion week; they never see another writer's unpublished work.
+        day_navigation = [
+            item for item in db.list_assigned_drafts(me["id"])
+            if item["week_id"] == week["id"]
+        ]
+        back_url = url_for("contrib_dashboard")
+        back_label = "My days"
+
     return render_template(
         "contrib_day.html", draft=draft, is_lead=is_lead, division=division,
-        writer_can_edit=is_lead or writer_can_edit,
+        writer_can_edit=is_lead or writer_can_edit, week=week,
+        day_navigation=day_navigation, back_url=back_url, back_label=back_label,
     )
 
 

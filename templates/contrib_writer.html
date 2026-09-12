@@ -1,24 +1,36 @@
 {% extends "base_umum.html" %}
 {% block title %}My days{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;gap:12px">
-  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Hi, {{ me.name }}</h2>
+<div class="contrib-heading">
+  <div><p class="eyebrow">Writer workspace</p><h2>Hi, {{ me.name }}</h2></div>
   <a class="iconbtn" href="{{ url_for('contrib_logout') }}">Log out</a>
 </div>
 
 {% if not days %}
-  <p style="color:var(--muted)">No days assigned to you yet — check back once a lead assigns you one.</p>
+  <div class="empty-state"><strong>No days assigned yet.</strong><br>Your lead will assign a day here when it is ready for you.</div>
 {% else %}
-<ul class="list">
-  {% for d in days %}
-  <li>
-    <div style="flex:1">
-      <a class="title" href="{{ url_for('contrib_day', draft_id=d.id) }}">{{ d.day_name }} — {{ d.theme or "untitled" }}</a>
-      <div class="sub">{{ d.date_str }}</div>
+  {% if next_day %}
+  <a class="next-task" href="{{ url_for('contrib_day', draft_id=next_day.id) }}">
+    <span class="next-task-kicker">{% if next_day.status == 'changes_requested' %}Changes requested{% elif next_day.status == 'draft' %}Ready to write{% else %}Waiting for review{% endif %}</span>
+    <strong>{{ next_day.day_name }} · {{ next_day.date_str }}</strong>
+    <small>{{ next_day.theme or 'Untitled devotion' }} <b>Open day →</b></small>
+  </a>
+  {% endif %}
+
+  {% for week, week_days in days | groupby('week_start') %}
+  <section class="contrib-section">
+    <div class="section-title"><div><p class="eyebrow">Your assigned days</p><h3>Week of {{ week }}</h3></div><span>{{ week_days | list | length }} day{% if week_days | list | length != 1 %}s{% endif %}</span></div>
+    <div class="day-card-grid">
+      {% for d in week_days %}
+      <a class="day-card status-{{ d.status }}" href="{{ url_for('contrib_day', draft_id=d.id) }}">
+        <span class="day-card-date">{{ d.day_name }} · {{ d.date_str }}</span>
+        <strong>{{ d.theme or 'Untitled devotion' }}</strong>
+        <span class="statuspill {{ d.status }}">{{ d.status.replace('_', ' ') }}</span>
+        {% if d.status == 'changes_requested' %}<small class="day-card-note">Feedback is ready to review</small>{% endif %}
+      </a>
+      {% endfor %}
     </div>
-    <span class="statuspill {{ d.status }}">{{ d.status.replace('_', ' ') }}</span>
-  </li>
+  </section>
   {% endfor %}
-</ul>
 {% endif %}
 {% endblock %}

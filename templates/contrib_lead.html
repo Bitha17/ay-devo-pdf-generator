@@ -1,73 +1,62 @@
 {% extends "base_umum.html" %}
 {% block title %}Lead dashboard{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;gap:12px">
-  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Hi, {{ me.name }}</h2>
+<div class="contrib-heading">
+  <div><p class="eyebrow">{{ division | upper }} lead workspace</p><h2>Hi, {{ me.name }}</h2></div>
   <a class="iconbtn" href="{{ url_for('contrib_logout') }}">Log out</a>
 </div>
 
-<form class="formcard" method="post" action="{{ url_for('contrib_week_new') }}">
-  <label>New week's start date (must be a {{ "Sunday" if division == "ay" else "Monday" }})</label>
-  <input type="date" name="start_date" id="weekStartDate" required>
-  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
-    {% if division == "ay" %}Creates 7 unassigned days (Minggu–Sabtu){% else %}Creates 7 unassigned days (Senin–Minggu){% endif %}
-    ready for writer assignment.
-  </p>
-  <div class="actions"><button class="btn primary" type="submit">Create week</button></div>
-</form>
-
-{% if not writers %}
-  <p style="color:var(--muted);margin-top:16px">No writers yet — add some in
-  the super-admin's Contributors page.</p>
+{% if weeks %}
+  {% set review_count = weeks | map(attribute='submitted_count') | sum %}
+  {% if next_review_day %}<a class="next-task" href="{{ url_for('contrib_day', draft_id=next_review_day.id) }}"><span class="next-task-kicker">Review queue</span><strong>{{ review_count }} day{% if review_count != 1 %}s{% endif %} submitted for review</strong><small>Open the next day needing review <b>→</b></small></a>{% endif %}
 {% endif %}
 
-<p style="margin-top:16px"><a class="iconbtn" href="{{ url_for('admin' if division == 'ay' else 'admin_umum') }}">Manage PDFs</a></p>
+<details class="new-week">
+  <summary>Create a new week</summary>
+  <form method="post" action="{{ url_for('contrib_week_new') }}">
+    <label>Week start date ({{ "Sunday" if division == "ay" else "Monday" }})</label>
+    <input type="date" name="start_date" id="weekStartDate" required>
+    <p class="sub">{% if division == "ay" %}Creates Minggu–Sabtu.{% else %}Creates Senin–Minggu.{% endif %}</p>
+    <div class="actions"><button class="btn primary" type="submit">Create week</button></div>
+  </form>
+</details>
 
-<h3 style="margin-top:28px">Weeks</h3>
-{% if not weeks %}
-  <p style="color:var(--muted)">No weeks yet.</p>
-{% else %}
-<ul class="list">
-  {% for w in weeks %}
-  <li>
-    <div style="flex:1">
-      <a class="title" href="{{ url_for('contrib_week', week_id=w.id) }}">Week of {{ w.start_date }}</a>
-      <div class="sub">
-        {{ w.days | selectattr('status', 'equalto', 'approved') | list | length }}/{{ w.days | length }} approved
-      </div>
+{% if not writers %}<p class="flash">No writers exist for this division. Ask the super-admin to add writers before assigning days.</p>{% endif %}
+<p class="lead-tools"><a class="iconbtn" href="{{ url_for('admin' if division == 'ay' else 'admin_umum') }}">Manage PDFs</a></p>
+
+<section class="contrib-section">
+  <div class="section-title"><div><p class="eyebrow">Writing pipeline</p><h3>Weeks</h3></div></div>
+  {% if not weeks %}
+    <div class="empty-state"><strong>No weeks yet.</strong><br>Create one above, then assign a writer to each day.</div>
+  {% else %}
+    <div class="week-card-list">
+      {% for w in weeks %}
+      <article class="week-card">
+        <a class="week-card-main" href="{{ url_for('contrib_week', week_id=w.id) }}">
+          <span>Week of {{ w.start_date }}</span>
+          <strong>{{ w.approved_count }}/{{ w.days | length }} approved</strong>
+          <small>{% if w.submitted_count %}{{ w.submitted_count }} waiting for review{% elif w.in_progress_count %}{{ w.in_progress_count }} in progress{% else %}Ready to publish{% endif %}</small>
+        </a>
+        <div class="week-progress" aria-label="{{ w.approved_count }} of {{ w.days | length }} days approved"><i style="width:{{ (w.approved_count * 100 / w.days|length)|round }}%"></i></div>
+        <div class="week-card-actions">
+          {% if w.next_day %}<a class="iconbtn" href="{{ url_for('contrib_day', draft_id=w.next_day.id) }}">Open next day</a>{% endif %}
+          <a class="iconbtn" href="{{ url_for('contrib_week', week_id=w.id) }}">All 7 days</a>
+          {% if w.published_slug %}<span class="badge live">PUBLISHED</span>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
     </div>
-    {% if w.published_slug %}
-      <span class="badge live">PUBLISHED</span>
-    {% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+  {% endif %}
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Umum weeks start on a Monday, AY weeks on a Sunday — snap forward to the
-  // next occurrence of that weekday on or after whatever's picked (never
-  // backward into the past), and default to the coming one.
   var startInput = document.getElementById("weekStartDate");
-  var TARGET_DAY = {{ 0 if division == "ay" else 1 }};  // JS getDay(): 0=Sun..6=Sat
-  function nextTargetDay(d) {
-    var day = d.getDay();
-    d.setDate(d.getDate() + ((TARGET_DAY - day + 7) % 7));
-    return d;
-  }
-  // NOT toISOString() — that serializes in UTC, which rolls back to the
-  // previous day for any timezone ahead of UTC (e.g. WIB, UTC+7).
-  function iso(d) {
-    var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
-    return y + "-" + m + "-" + day;
-  }
+  var TARGET_DAY = {{ 0 if division == "ay" else 1 }};
+  function nextTargetDay(d) { d.setDate(d.getDate() + ((TARGET_DAY - d.getDay() + 7) % 7)); return d; }
+  function iso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   startInput.value = iso(nextTargetDay(new Date()));
-  startInput.addEventListener("change", function () {
-    if (!this.value) return;
-    var d = new Date(this.value + "T00:00:00");
-    this.value = iso(nextTargetDay(d));
-  });
+  startInput.addEventListener("change", function () { if (this.value) this.value = iso(nextTargetDay(new Date(this.value + "T00:00:00"))); });
 </script>
 {% endblock %}
