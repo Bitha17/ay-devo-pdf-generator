@@ -133,6 +133,7 @@ def init_db():
                 m4             TEXT NOT NULL DEFAULT '',
                 aplikasi_json  TEXT NOT NULL DEFAULT '[]',
                 review_notes   TEXT NOT NULL DEFAULT '',
+                feedback_draft TEXT NOT NULL DEFAULT '', -- private until lead sends it
                 updated_at     TEXT NOT NULL,
                 UNIQUE(week_id, day_index)
             )
@@ -144,6 +145,8 @@ def init_db():
                 conn.execute(f"ALTER TABLE day_drafts ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         if "aplikasi_json" not in draft_cols:
             conn.execute("ALTER TABLE day_drafts ADD COLUMN aplikasi_json TEXT NOT NULL DEFAULT '[]'")
+        if "feedback_draft" not in draft_cols:
+            conn.execute("ALTER TABLE day_drafts ADD COLUMN feedback_draft TEXT NOT NULL DEFAULT ''")
 
 
 def _now_iso():
@@ -299,6 +302,37 @@ def delete_contributor(contributor_id):
         conn.execute("DELETE FROM contributors WHERE id = ?", (contributor_id,))
 
 
+def update_contributor(contributor_id, name, email, role, division, password_hash=None):
+    """Update a contributor. Returns False when the email belongs to another account.
+
+    An account which stops being a writer or moves division is unassigned from
+    its days. Those drafts remain intact for the relevant lead to reassign.
+    """
+    try:
+        with _connect() as conn:
+            old = conn.execute(
+                "SELECT role, division FROM contributors WHERE id = ?", (contributor_id,)
+            ).fetchone()
+            if not old:
+                return False
+            if password_hash:
+                conn.execute(
+                    "UPDATE contributors SET name = ?, email = ?, role = ?, division = ?, password_hash = ? "
+                    "WHERE id = ?",
+                    (name, email.strip().lower(), role, division, password_hash, contributor_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE contributors SET name = ?, email = ?, role = ?, division = ? WHERE id = ?",
+                    (name, email.strip().lower(), role, division, contributor_id),
+                )
+            if old["role"] == "writer" and (role != "writer" or old["division"] != division):
+                conn.execute("UPDATE day_drafts SET assigned_to = NULL WHERE assigned_to = ?", (contributor_id,))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
 # ------------------------------------------------------ umum weeks & day drafts
 def create_week(start_date, day_specs, division="umum"):
     """day_specs: list of (day_name, date_str) in order. Creates the week and
@@ -422,6 +456,30 @@ def review_draft(draft_id, status, review_notes=""):
             "UPDATE day_drafts SET status = ?, review_notes = ?, updated_at = ? WHERE id = ?",
             (status, review_notes, _now_iso(), draft_id),
         )
+
+
+def update_feedback_draft(draft_id, feedback_draft):
+    """Store feedback privately until a lead deliberately sends it."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE day_drafts SET feedback_draft = ?, updated_at = ? WHERE id = ?",
+            (feedback_draft, _now_iso(), draft_id),
+        )
+
+
+def publish_feedback(draft_id, feedback, status=None):
+    """Make feedback visible to the assigned writer, optionally requesting changes."""
+    with _connect() as conn:
+        if status:
+            conn.execute(
+                "UPDATE day_drafts SET review_notes = ?, feedback_draft = '', status = ?, updated_at = ? WHERE id = ?",
+                (feedback, status, _now_iso(), draft_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE day_drafts SET review_notes = ?, feedback_draft = '', updated_at = ? WHERE id = ?",
+                (feedback, _now_iso(), draft_id),
+            )
 
 
 init_db()

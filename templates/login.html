@@ -1,0 +1,40 @@
+{% extends "base_umum.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<div class="formcard">
+  <h2 style="margin-top:0">Log in</h2>
+  <div class="viewtoggle" style="margin:0 0 20px">
+    <button type="button" class="{% if mode == 'contributor' %}active{% endif %}" data-mode="contributor">Contributor</button>
+    <button type="button" class="{% if mode == 'super' %}active{% endif %}" data-mode="super">Super admin</button>
+  </div>
+  <p id="loginHelp" class="sub" style="color:var(--muted);font-size:13px;margin-top:0"></p>
+  <form method="post">
+    <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+    <input type="hidden" name="mode" id="mode" value="{{ mode }}">
+    <div id="emailField" {% if mode == 'super' %}hidden{% endif %}>
+      <label>Email</label>
+      <input type="email" name="email" id="email" autocomplete="email" {% if mode != 'super' %}required{% endif %} autofocus>
+    </div>
+    <label>Password</label>
+    <input type="password" name="password" id="password" autocomplete="current-password" required>
+    <label class="pwshow"><input type="checkbox" id="pwShow"> Show password</label>
+    <div class="actions"><button class="btn primary" type="submit">Log in</button></div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  var mode = document.getElementById("mode"), emailField = document.getElementById("emailField"), email = document.getElementById("email"), help = document.getElementById("loginHelp");
+  function setMode(next) {
+    mode.value = next;
+    var contributor = next === "contributor";
+    emailField.hidden = !contributor;
+    email.required = contributor;
+    help.textContent = contributor ? "Use the email and password provided for your writer or lead account." : "Use the deployment-configured super-admin password to manage contributor accounts.";
+    document.querySelectorAll("[data-mode]").forEach(function (button) { button.classList.toggle("active", button.dataset.mode === next); });
+  }
+  document.querySelectorAll("[data-mode]").forEach(function (button) { button.addEventListener("click", function () { setMode(button.dataset.mode); }); });
+  document.getElementById("pwShow").addEventListener("change", function () { document.getElementById("password").type = this.checked ? "text" : "password"; });
+  setMode(mode.value);
+</script>
+{% endblock %}

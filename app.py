@@ -2,6 +2,7 @@ import os
 import io
 import re
 import hmac
+from urllib.parse import urlsplit
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from zoneinfo import ZoneInfo
@@ -53,20 +54,42 @@ ACTIVE_BG = os.path.join(db.DATA_DIR, "bg.png")  # admin-uploaded override (pers
 
 # ---------------------------------------------------------------- helpers
 def require_admin(view):
+    """Super-admin only: contributor account management."""
     @wraps(view)
     def wrapper(*args, **kwargs):
         if not session.get("admin"):
-            return redirect(url_for("admin_login", next=request.path))
+            return redirect(url_for("login", mode="super", next=request.path))
         return view(*args, **kwargs)
     return wrapper
+
+
+def require_content_admin(division):
+    """Super-admin or the lead for a division's generator and content."""
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            if can_manage_division(division):
+                return view(*args, **kwargs)
+            if current_contributor():
+                abort(403)
+            return redirect(url_for("login", next=request.path))
+        return wrapper
+    return decorator
 
 
 def require_contributor(view):
     """Any signed-in contributor (writer or lead)."""
     @wraps(view)
     def wrapper(*args, **kwargs):
-        if not session.get("contrib_id"):
-            return redirect(url_for("contrib_login", next=request.path))
+        contributor = current_contributor()
+        if not contributor:
+            clear_contributor_session()
+            return redirect(url_for("login", next=request.path))
+        # Roles and divisions are account data, not permanent properties of a
+        # browser cookie. This also applies an admin's account changes without
+        # requiring every contributor to sign out and back in.
+        session["contrib_role"] = contributor["role"]
+        session["contrib_division"] = contributor["division"]
         return view(*args, **kwargs)
     return wrapper
 
@@ -79,19 +102,55 @@ def require_lead(view):
     get lead access just because an old admin cookie is still set."""
     @wraps(view)
     def wrapper(*args, **kwargs):
-        if session.get("contrib_id"):
-            if session.get("contrib_role") == "lead":
+        contributor = current_contributor()
+        if contributor:
+            session["contrib_role"] = contributor["role"]
+            session["contrib_division"] = contributor["division"]
+            if contributor["role"] == "lead":
                 return view(*args, **kwargs)
             abort(403)
+        if session.get("contrib_id"):
+            clear_contributor_session()
         if session.get("admin"):
             return view(*args, **kwargs)
-        return redirect(url_for("contrib_login", next=request.path))
+        return redirect(url_for("login", next=request.path))
     return wrapper
 
 
 def current_contributor():
     cid = session.get("contrib_id")
     return db.get_contributor(cid) if cid else None
+
+
+def clear_contributor_session():
+    for key in ("contrib_id", "contrib_role", "contrib_division"):
+        session.pop(key, None)
+
+
+def can_manage_division(division):
+    """Whether this request may lead a collaborative week in *division*."""
+    contributor = current_contributor()
+    if contributor:
+        return contributor["role"] == "lead" and contributor["division"] == division
+    return bool(session.get("admin"))
+
+
+def safe_next_url(value, fallback):
+    """Only redirect to an internal path; never reflect an external URL."""
+    if value:
+        parsed = urlsplit(value)
+        if not parsed.scheme and not parsed.netloc and value.startswith("/") and not value.startswith("//"):
+            return value
+    return fallback
+
+
+def valid_email(value):
+    return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value))
+
+
+@app.context_processor
+def template_permissions():
+    return {"is_super_admin": bool(session.get("admin"))}
 
 
 def to_local(iso_utc):
@@ -202,9 +261,9 @@ def index():
 
 @app.route("/d/<slug>")
 def devotion(slug):
-    # Admins can preview scheduled (not-yet-published) devotions.
-    dev = db.get_by_slug(slug, include_unpublished=session.get("admin"))
-    if not dev:
+    # The AY lead and super-admin can preview scheduled devotions.
+    dev = db.get_by_slug(slug, include_unpublished=bool(session.get("admin") or current_contributor()))
+    if not dev or dev["division"] != "ay" or (not is_published(dev) and not can_manage_division("ay")):
         abort(404)
     return render_template(
         "reader.html", dev=dev, archive=db.list_published(), is_latest=False,
@@ -219,18 +278,18 @@ def archive():
 
 @app.route("/d/<slug>/hero")
 def devotion_hero(slug):
-    admin = session.get("admin")
-    dev = db.get_by_slug(slug, include_unpublished=admin)
-    if not dev or not dev.get("hero_path") or not os.path.exists(dev["hero_path"]):
+    dev = db.get_by_slug(slug, include_unpublished=bool(session.get("admin") or current_contributor()))
+    if (not dev or dev["division"] != "ay" or not dev.get("hero_path")
+            or not os.path.exists(dev["hero_path"]) or (not is_published(dev) and not can_manage_division("ay"))):
         abort(404)
     return send_file(dev["hero_path"])
 
 
 @app.route("/d/<slug>/pdf")
 def devotion_pdf(slug):
-    admin = session.get("admin")
-    dev = db.get_by_slug(slug, include_unpublished=admin)
-    if not dev or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
+    dev = db.get_by_slug(slug, include_unpublished=bool(session.get("admin") or current_contributor()))
+    if (not dev or dev["division"] != "ay" or not dev.get("pdf_path")
+            or not os.path.exists(dev["pdf_path"]) or (not is_published(dev) and not can_manage_division("ay"))):
         abort(404)
     return send_file(dev["pdf_path"], mimetype="application/pdf")
 
@@ -250,8 +309,8 @@ def index_umum():
 
 @app.route("/umum/d/<slug>")
 def devotion_umum(slug):
-    dev = db.get_by_slug(slug, include_unpublished=session.get("admin"))
-    if not dev or dev["division"] != "umum":
+    dev = db.get_by_slug(slug, include_unpublished=bool(session.get("admin") or current_contributor()))
+    if not dev or dev["division"] != "umum" or (not is_published(dev) and not can_manage_division("umum")):
         abort(404)
     return render_template(
         "reader_umum.html", dev=dev, archive=db.list_published(division="umum"),
@@ -266,22 +325,43 @@ def archive_umum():
 
 @app.route("/umum/d/<slug>/pdf")
 def devotion_umum_pdf(slug):
-    admin = session.get("admin")
-    dev = db.get_by_slug(slug, include_unpublished=admin)
+    dev = db.get_by_slug(slug, include_unpublished=bool(session.get("admin") or current_contributor()))
     if not dev or dev["division"] != "umum" or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
+        abort(404)
+    if not is_published(dev) and not can_manage_division("umum"):
         abort(404)
     return send_file(dev["pdf_path"], mimetype="application/pdf")
 
 
-# ---------------------------------------------------------------- admin
+# ---------------------------------------------------------------- authentication
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    mode = request.form.get("mode") or request.args.get("mode", "contributor")
+    if mode not in ("contributor", "super"):
+        mode = "contributor"
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if mode == "super" and hmac.compare_digest(password, ADMIN_PASSWORD):
+            clear_contributor_session()
+            session["admin"] = True
+            return redirect(safe_next_url(request.form.get("next") or request.args.get("next"), url_for("admin")))
+        if mode == "contributor":
+            email = request.form.get("email", "").strip()
+            contributor = db.get_contributor_by_email(email)
+            if contributor and check_password_hash(contributor["password_hash"], password):
+                session.pop("admin", None)
+                session["contrib_id"] = contributor["id"]
+                session["contrib_role"] = contributor["role"]
+                session["contrib_division"] = contributor["division"]
+                return redirect(safe_next_url(request.form.get("next") or request.args.get("next"), url_for("contrib_dashboard")))
+        flash("Wrong email or password." if mode == "contributor" else "Wrong password.")
+    return render_template("login.html", mode=mode)
+
+
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
-    if request.method == "POST":
-        if hmac.compare_digest(request.form.get("password", ""), ADMIN_PASSWORD):
-            session["admin"] = True
-            return redirect(request.args.get("next") or url_for("admin"))
-        flash("Wrong password.")
-    return render_template("admin_login.html")
+    """Legacy bookmark; use the shared login page."""
+    return redirect(url_for("login", mode="super", next=request.args.get("next", "")))
 
 
 @app.route("/admin/logout")
@@ -291,13 +371,13 @@ def admin_logout():
 
 
 @app.route("/admin")
-@require_admin
+@require_content_admin("ay")
 def admin():
     return render_template("admin.html", devotions=db.list_all())
 
 
 @app.route("/admin/upload", methods=["POST"])
-@require_admin
+@require_content_admin("ay")
 def admin_upload():
     txt_file = request.files["txt"]
     pdf_cover = request.files.get("pdf_cover")   # mandatory: PDF first page
@@ -369,20 +449,20 @@ def admin_upload():
 
 
 @app.route("/admin/edit/<slug>")
-@require_admin
+@require_content_admin("ay")
 def admin_edit(slug):
     dev = db.get_by_slug(slug, include_unpublished=True)
-    if not dev:
+    if not dev or dev["division"] != "ay":
         abort(404)
     publish_local = to_local(dev["publish_at"]).strftime("%Y-%m-%dT%H:%M")
     return render_template("admin_edit.html", dev=dev, publish_local=publish_local)
 
 
 @app.route("/admin/edit/<slug>", methods=["POST"])
-@require_admin
+@require_content_admin("ay")
 def admin_edit_save(slug):
     dev = db.get_by_slug(slug, include_unpublished=True)
-    if not dev:
+    if not dev or dev["division"] != "ay":
         abort(404)
 
     parsed = dev["data"]
@@ -450,19 +530,23 @@ def admin_edit_save(slug):
 
 
 @app.route("/admin/delete/<slug>", methods=["POST"])
-@require_admin
+@require_content_admin("ay")
 def admin_delete(slug):
+    dev = db.get_by_slug(slug, include_unpublished=True)
+    if not dev or dev["division"] != "ay":
+        abort(404)
     db.delete_by_slug(slug)
     flash(f"Deleted {slug}.")
     return redirect(url_for("admin"))
 
 
 @app.route("/admin/download/<slug>")
-@require_admin
+@require_content_admin("ay")
 def admin_download(slug):
     """Download the PDF with the proper 'Devotion AbbaYouth_<period>.pdf' name."""
     dev = db.get_by_slug(slug, include_unpublished=True)
-    if not dev or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
+    if (not dev or dev["division"] != "ay" or not dev.get("pdf_path")
+            or not os.path.exists(dev["pdf_path"])):
         abort(404)
     return send_file(
         dev["pdf_path"], mimetype="application/pdf", as_attachment=True,
@@ -471,7 +555,7 @@ def admin_download(slug):
 
 
 @app.route("/admin/background", methods=["POST"])
-@require_admin
+@require_content_admin("ay")
 def admin_background():
     """Replace the content-page background. Affects FUTURE PDFs only; existing
     PDFs are kept as they are (use /admin/regenerate to update them)."""
@@ -485,7 +569,7 @@ def admin_background():
 
 
 @app.route("/admin/regenerate", methods=["POST"])
-@require_admin
+@require_content_admin("ay")
 def admin_regenerate():
     """Re-render every existing PDF with the current background (opt-in)."""
     n = regenerate_all_pdfs()
@@ -494,20 +578,20 @@ def admin_regenerate():
 
 
 @app.route("/admin/background/current")
-@require_admin
+@require_content_admin("ay")
 def admin_background_current():
     return send_file(current_bg_path())
 
 
 # ------------------------------------------------------------ admin (Umum)
 @app.route("/admin/umum")
-@require_admin
+@require_content_admin("umum")
 def admin_umum():
     return render_template("admin_umum.html", devotions=db.list_all(division="umum"))
 
 
 @app.route("/admin/umum/upload", methods=["POST"])
-@require_admin
+@require_content_admin("umum")
 def admin_umum_upload():
     docx_file = request.files["docx"]
     pdf_cover = request.files["pdf_cover"]   # mandatory: PDF first page
@@ -557,7 +641,7 @@ def admin_umum_upload():
 
 
 @app.route("/admin/umum/edit/<slug>")
-@require_admin
+@require_content_admin("umum")
 def admin_umum_edit(slug):
     dev = db.get_by_slug(slug, include_unpublished=True)
     if not dev or dev["division"] != "umum":
@@ -567,7 +651,7 @@ def admin_umum_edit(slug):
 
 
 @app.route("/admin/umum/edit/<slug>", methods=["POST"])
-@require_admin
+@require_content_admin("umum")
 def admin_umum_edit_save(slug):
     dev = db.get_by_slug(slug, include_unpublished=True)
     if not dev or dev["division"] != "umum":
@@ -627,15 +711,18 @@ def admin_umum_edit_save(slug):
 
 
 @app.route("/admin/umum/delete/<slug>", methods=["POST"])
-@require_admin
+@require_content_admin("umum")
 def admin_umum_delete(slug):
+    dev = db.get_by_slug(slug, include_unpublished=True)
+    if not dev or dev["division"] != "umum":
+        abort(404)
     db.delete_by_slug(slug)
     flash(f"Deleted {slug}.")
     return redirect(url_for("admin_umum"))
 
 
 @app.route("/admin/umum/download/<slug>")
-@require_admin
+@require_content_admin("umum")
 def admin_umum_download(slug):
     dev = db.get_by_slug(slug, include_unpublished=True)
     if not dev or dev["division"] != "umum" or not dev.get("pdf_path") or not os.path.exists(dev["pdf_path"]):
@@ -666,15 +753,38 @@ def admin_contributors_add():
     role = request.form.get("role", "").strip()
     division = request.form.get("division", "").strip()
     password = request.form.get("password", "")
-    if (not name or not email or role not in ("writer", "lead")
-            or division not in ("ay", "umum") or len(password) < 6):
-        flash("Fill in a name, valid email, role, division, and a password of at least 6 characters.")
+    if (not name or not valid_email(email) or role not in ("writer", "lead")
+            or division not in ("ay", "umum") or len(password) < 10):
+        flash("Fill in a name, valid email, role, division, and a password of at least 10 characters.")
         return redirect(url_for("admin_contributors", division=division or "umum"))
     if db.get_contributor_by_email(email):
         flash(f"{email} is already a contributor.")
         return redirect(url_for("admin_contributors", division=division))
     db.create_contributor(name, email, generate_password_hash(password), role, division)
     flash(f"Added {name} as a {division.upper()} {role}.")
+    return redirect(url_for("admin_contributors", division=division))
+
+
+@app.route("/admin/contributors/<int:contributor_id>/edit", methods=["POST"])
+@require_admin
+def admin_contributors_edit(contributor_id):
+    contributor = db.get_contributor(contributor_id)
+    if not contributor:
+        abort(404)
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
+    role = request.form.get("role", "").strip()
+    division = request.form.get("division", "").strip()
+    password = request.form.get("password", "")
+    if (not name or not valid_email(email) or role not in ("writer", "lead")
+            or division not in ("ay", "umum") or (password and len(password) < 10)):
+        flash("Use a name, valid email, valid role and division. New passwords must have at least 10 characters.")
+        return redirect(url_for("admin_contributors", division=contributor["division"]))
+    password_hash = generate_password_hash(password) if password else None
+    if not db.update_contributor(contributor_id, name, email, role, division, password_hash):
+        flash(f"{email} is already a contributor.")
+        return redirect(url_for("admin_contributors", division=contributor["division"]))
+    flash(f"Updated {name}. Their next request will use the new role and division.")
     return redirect(url_for("admin_contributors", division=division))
 
 
@@ -689,25 +799,14 @@ def admin_contributors_delete(contributor_id):
 
 @app.route("/contrib/login", methods=["GET", "POST"])
 def contrib_login():
-    if request.method == "POST":
-        email = request.form.get("email", "").strip()
-        password = request.form.get("password", "")
-        contributor = db.get_contributor_by_email(email)
-        if contributor and check_password_hash(contributor["password_hash"], password):
-            session["contrib_id"] = contributor["id"]
-            session["contrib_role"] = contributor["role"]
-            session["contrib_division"] = contributor["division"]
-            return redirect(request.args.get("next") or url_for("contrib_dashboard"))
-        flash("Wrong email or password.")
-    return render_template("contrib_login.html")
+    """Legacy bookmark; use the shared login page."""
+    return redirect(url_for("login", next=request.args.get("next", "")))
 
 
 @app.route("/contrib/logout")
 def contrib_logout():
-    session.pop("contrib_id", None)
-    session.pop("contrib_role", None)
-    session.pop("contrib_division", None)
-    return redirect(url_for("contrib_login"))
+    clear_contributor_session()
+    return redirect(url_for("login"))
 
 
 @app.route("/contrib")
@@ -765,6 +864,8 @@ def contrib_week(week_id):
     week = db.get_week(week_id)
     if not week:
         abort(404)
+    if not can_manage_division(week["division"]):
+        abort(403)
     days = db.list_day_drafts(week_id)
     writers = [c for c in db.list_contributors(week["division"]) if c["role"] == "writer"]
     contributors_by_id = {c["id"]: c for c in db.list_contributors(week["division"])}
@@ -780,8 +881,15 @@ def contrib_day_assign(draft_id):
     draft = db.get_day_draft(draft_id)
     if not draft:
         abort(404)
+    week = db.get_week(draft["week_id"])
+    if not week or not can_manage_division(week["division"]):
+        abort(403)
     writer_id = request.form.get("writer_id", "").strip()
-    db.assign_draft(draft_id, int(writer_id) if writer_id else None)
+    writer = db.get_contributor(int(writer_id)) if writer_id.isdigit() else None
+    if writer_id and (not writer or writer["role"] != "writer" or writer["division"] != week["division"]):
+        flash("Choose a writer from this division.")
+        return redirect(url_for("contrib_week", week_id=draft["week_id"]))
+    db.assign_draft(draft_id, writer["id"] if writer else None)
     return redirect(url_for("contrib_week", week_id=draft["week_id"]))
 
 
@@ -792,15 +900,14 @@ def contrib_day(draft_id):
     if not draft:
         abort(404)
     week = db.get_week(draft["week_id"])
+    if not week:
+        abort(404)
     division = week["division"]
     me = current_contributor()
     # A logged-in contributor's own role governs, even if this browser also
     # holds an admin session — never let a stale admin cookie grant a writer
     # lead controls (see require_lead for the same rule on other routes).
-    if session.get("contrib_id"):
-        is_lead = session.get("contrib_role") == "lead"
-    else:
-        is_lead = bool(session.get("admin"))
+    is_lead = can_manage_division(division)
     is_owner = draft["assigned_to"] == (me["id"] if me else None)
     if not is_lead and not is_owner:
         abort(403)
@@ -886,6 +993,8 @@ def contrib_week_publish(week_id):
     week = db.get_week(week_id)
     if not week:
         abort(404)
+    if not can_manage_division(week["division"]):
+        abort(403)
     days = db.list_day_drafts(week_id)
     division = week["division"]
 
