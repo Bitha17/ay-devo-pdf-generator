@@ -1,7 +1,10 @@
 // Writer-facing verse picker: Book -> Chapter -> tick the actual verses (with
 // their text shown, fetched live) instead of typing a free-text reference.
-// Each `.versepicker[data-target=<id>]` fills the hidden input #<id> with the
-// built reference string ("Mazmur 96:1-9") that the rest of the form submits.
+// A picker can hold multiple passage rows ("+ Add another passage"), each its
+// own book/chapter/verses, so a reference can span multiple chapters and/or
+// books (e.g. "Mazmur 96:1-9; Yohanes 3:16"). Each `.versepicker[data-target]`
+// fills the hidden input #<target> with the built, semicolon-joined string —
+// the same multi-passage format bible.js already reads for the reader view.
 (function () {
   "use strict";
   if (!window.BIBLE_BOOKS) return;
@@ -62,6 +65,11 @@
     return { book: m[1].trim(), chapter: parseInt(m[2], 10), verseSpec: m[3].replace(/–/g, "-") };
   }
 
+  // "Mazmur 96:1-9; Yohanes 3:16" -> [{book,chapter,verseSpec}, ...]
+  function parseMultiRef(raw) {
+    return String(raw || "").split(/;+/).map(function (seg) { return parseRef(seg); }).filter(Boolean);
+  }
+
   var chapterCache = {};
   function fetchChapter(book, chapter) {
     var key = VERSION + ":" + book + ":" + chapter;
@@ -79,11 +87,9 @@
     return chapterCache[key];
   }
 
-  function initPicker(root) {
-    var targetId = root.dataset.target;
-    var target = document.getElementById(targetId);
-    if (!target) return;
-
+  // One book+chapter+verses row. `onChange` fires whenever this row's own
+  // passage string might have changed, so the picker can rebuild the target.
+  function makePassageRow(onChange, onRemove) {
     var bookSel = document.createElement("select");
     bookSel.className = "vp-book";
     bookSel.innerHTML = '<option value="">Pilih kitab…</option>' +
@@ -96,35 +102,32 @@
     chapSel.disabled = true;
     chapSel.innerHTML = '<option value="">Pasal…</option>';
 
-    var row = document.createElement("div");
-    row.className = "vp-row";
-    row.appendChild(bookSel);
-    row.appendChild(chapSel);
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "danger vp-remove-passage";
+    removeBtn.textContent = "✕";
+    removeBtn.title = "Hapus bagian ayat ini";
+
+    var topRow = document.createElement("div");
+    topRow.className = "vp-row";
+    topRow.appendChild(bookSel);
+    topRow.appendChild(chapSel);
+    topRow.appendChild(removeBtn);
 
     var versesBox = document.createElement("div");
     versesBox.className = "vp-verses";
     versesBox.hidden = true;
 
-    var current = document.createElement("div");
-    current.className = "vp-current sub";
+    var el = document.createElement("div");
+    el.className = "vp-passage";
+    el.appendChild(topRow);
+    el.appendChild(versesBox);
 
-    root.appendChild(row);
-    root.appendChild(versesBox);
-    root.appendChild(current);
-
-    function updateCurrent() {
-      current.textContent = target.value ? "Dipilih: " + target.value : "Belum ada ayat dipilih.";
-    }
-
-    function rebuildTarget() {
+    function passageString() {
       var checked = Array.prototype.slice.call(versesBox.querySelectorAll("input:checked"))
         .map(function (cb) { return parseInt(cb.value, 10); });
-      if (!checked.length || !bookSel.value || !chapSel.value) {
-        target.value = "";
-      } else {
-        target.value = bookSel.value + " " + chapSel.value + ":" + compressRanges(checked);
-      }
-      updateCurrent();
+      if (!checked.length || !bookSel.value || !chapSel.value) return null;
+      return bookSel.value + " " + chapSel.value + ":" + compressRanges(checked);
     }
 
     function renderVerseList(verses, checkedSet) {
@@ -137,7 +140,7 @@
         cb.type = "checkbox";
         cb.value = v.verse;
         if (checkedSet && checkedSet[v.verse]) cb.checked = true;
-        cb.addEventListener("change", rebuildTarget);
+        cb.addEventListener("change", onChange);
         label.appendChild(cb);
         var span = document.createElement("span");
         span.innerHTML = "<sup>" + v.verse + "</sup> " + esc(v.content.replace(/^\(\d+-\d+\)\s*/, ""));
@@ -151,7 +154,7 @@
       versesBox.innerHTML = '<div class="versloading"><span class="spinner"></span> Memuat ayat…</div>';
       fetchChapter(bookSel.value, parseInt(chapSel.value, 10)).then(function (verses) {
         renderVerseList(verses, checkedSet);
-        if (checkedSet) rebuildTarget();
+        if (checkedSet) onChange();
       }).catch(function () {
         versesBox.innerHTML = '<p class="verserr">Tidak dapat memuat ayat ini.</p>';
       });
@@ -166,31 +169,83 @@
       chapSel.disabled = !n;
       versesBox.hidden = true;
       versesBox.innerHTML = "";
-      target.value = "";
-      updateCurrent();
+      onChange();
     });
 
     chapSel.addEventListener("change", function () {
-      if (!chapSel.value) { versesBox.hidden = true; versesBox.innerHTML = ""; target.value = ""; updateCurrent(); return; }
+      if (!chapSel.value) { versesBox.hidden = true; versesBox.innerHTML = ""; onChange(); return; }
       loadChapter(null);
     });
 
-    // Prefill from an existing reference (editing a draft, or a changes-requested resubmit).
-    var existing = parseRef(target.value);
-    if (existing) {
-      var bookOpt = Array.prototype.find.call(bookSel.options, function (o) { return o.value === existing.book; });
-      if (bookOpt) {
-        bookSel.value = existing.book;
+    removeBtn.addEventListener("click", function () { onRemove(row); });
+
+    var row = {
+      el: el,
+      passageString: passageString,
+      prefill: function (book, chapter, verseSpec) {
+        var bookOpt = Array.prototype.find.call(bookSel.options, function (o) { return o.value === book; });
+        if (!bookOpt) return;
+        bookSel.value = book;
         bookSel.dispatchEvent(new Event("change"));
-        chapSel.value = String(existing.chapter);
-        if (chapSel.value === String(existing.chapter)) {
-          var checkedSet = {};
-          expandRanges(existing.verseSpec).forEach(function (n) { checkedSet[n] = true; });
-          loadChapter(checkedSet);
-        }
-      }
+        chapSel.value = String(chapter);
+        if (chapSel.value !== String(chapter)) return;
+        var checkedSet = {};
+        expandRanges(verseSpec).forEach(function (n) { checkedSet[n] = true; });
+        loadChapter(checkedSet);
+      },
+    };
+    return row;
+  }
+
+  function initPicker(root) {
+    var targetId = root.dataset.target;
+    var target = document.getElementById(targetId);
+    if (!target) return;
+
+    var rowsBox = document.createElement("div");
+    var addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "btn vp-add-passage";
+    addBtn.textContent = "+ Tambah bagian ayat lain";
+    var current = document.createElement("div");
+    current.className = "vp-current sub";
+
+    root.appendChild(rowsBox);
+    root.appendChild(addBtn);
+    root.appendChild(current);
+
+    var rows = [];
+
+    function rebuildTarget() {
+      var parts = rows.map(function (r) { return r.passageString(); }).filter(Boolean);
+      target.value = parts.join("; ");
+      current.textContent = target.value ? "Dipilih: " + target.value : "Belum ada ayat dipilih.";
     }
-    updateCurrent();
+
+    function removeRow(row) {
+      rows = rows.filter(function (r) { return r !== row; });
+      row.el.remove();
+      rebuildTarget();
+    }
+
+    function addRow(prefill) {
+      var row = makePassageRow(rebuildTarget, removeRow);
+      rows.push(row);
+      rowsBox.appendChild(row.el);
+      if (prefill) row.prefill(prefill.book, prefill.chapter, prefill.verseSpec);
+      return row;
+    }
+
+    addBtn.addEventListener("click", function () { addRow(); });
+
+    // Prefill from an existing (possibly multi-passage) reference.
+    var existing = parseMultiRef(target.value);
+    if (existing.length) {
+      existing.forEach(function (p) { addRow(p); });
+    } else {
+      addRow();
+    }
+    rebuildTarget();
   }
 
   window.initVersePicker = initPicker;

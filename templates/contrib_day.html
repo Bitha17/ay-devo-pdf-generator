@@ -28,13 +28,14 @@
   {% endif %}
 
   <label>Konteks{% if division == "ay" %} (Segment 1){% endif %}</label>
-  <textarea name="context" rows="6">{{ draft.context }}</textarea>
+  <textarea name="context" class="richtext" rows="6">{{ draft.context }}</textarea>
   <label>Firman Kristus{% if division == "ay" %} (Segment 2){% endif %}</label>
-  <textarea name="firman_kristus" rows="6">{{ draft.firman_kristus }}</textarea>
+  <textarea name="firman_kristus" class="richtext" rows="6">{{ draft.firman_kristus }}</textarea>
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
-    Use &lt;b&gt;bold&lt;/b&gt; / &lt;i&gt;italic&lt;/i&gt; for inline formatting in Konteks/Firman Kristus.
+    Select text, then click <strong>B</strong> or <strong>I</strong> above the box to bold/italicize it.
   </p>
 
+  {% if division == "ay" %}
   <label>Pertanyaan Perenungan Ayat — each question needs its own chosen reference verse</label>
   <div id="questionsList">
     {% for q in (draft.questions or [{"text": "", "verse": ""}]) %}
@@ -47,6 +48,10 @@
     {% endfor %}
   </div>
   <div class="actions"><button class="btn" type="button" id="addQuestion">+ Add question</button></div>
+  {% else %}
+  <label>Pertanyaan (one question per line)</label>
+  <textarea name="questions_plain" rows="4">{{ draft.questions | map(attribute="text") | join('\n') }}</textarea>
+  {% endif %}
 
   {% if division == "ay" %}
   <label>Aplikasi (one item per line)</label>
@@ -71,7 +76,7 @@
   {% if draft.context %}<h4>Konteks</h4>{% for para in draft.context.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}{% endif %}
   {% if draft.firman_kristus %}<h4>Firman Kristus</h4>{% for para in draft.firman_kristus.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}{% endif %}
   {% if draft.questions %}
-  <h4>Pertanyaan Perenungan Ayat</h4>
+  <h4>{% if division == "ay" %}Pertanyaan Perenungan Ayat{% else %}Pertanyaan{% endif %}</h4>
   <ol>{% for q in draft.questions %}<li>{{ q.text | markup }} {% if q.verse %}<em>({{ q.verse }})</em>{% endif %}</li>{% endfor %}</ol>
   {% endif %}
   {% if draft.aplikasi %}<h4>Aplikasi</h4><ol>{% for a in draft.aplikasi %}<li>{{ a | markup }}</li>{% endfor %}</ol>{% endif %}
@@ -104,6 +109,8 @@
 {% if writer_can_edit %}
 <script src="{{ url_for('static', filename='bible_books.js') }}"></script>
 <script src="{{ url_for('static', filename='versepicker.js') }}"></script>
+<script src="{{ url_for('static', filename='richtext.js') }}"></script>
+{% if division == "ay" %}
 <script>
   var qList = document.getElementById("questionsList");
   var qCounter = qList.querySelectorAll(".qblock").length;
@@ -127,5 +134,6 @@
     }
   });
 </script>
+{% endif %}
 {% endif %}
 {% endblock %}

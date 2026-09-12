@@ -72,14 +72,20 @@ def require_contributor(view):
 
 
 def require_lead(view):
-    """Lead contributor, or the super-admin (who can always step in)."""
+    """Lead contributor, or — only when no contributor is logged in at all —
+    the super-admin stepping in directly. A logged-in contributor's own role
+    always governs, even if this browser also happens to hold an admin
+    session (e.g. the same person used /admin earlier): a writer must never
+    get lead access just because an old admin cookie is still set."""
     @wraps(view)
     def wrapper(*args, **kwargs):
+        if session.get("contrib_id"):
+            if session.get("contrib_role") == "lead":
+                return view(*args, **kwargs)
+            abort(403)
         if session.get("admin"):
             return view(*args, **kwargs)
-        if not session.get("contrib_id") or session.get("contrib_role") != "lead":
-            return redirect(url_for("contrib_login", next=request.path))
-        return view(*args, **kwargs)
+        return redirect(url_for("contrib_login", next=request.path))
     return wrapper
 
 
@@ -788,7 +794,13 @@ def contrib_day(draft_id):
     week = db.get_week(draft["week_id"])
     division = week["division"]
     me = current_contributor()
-    is_lead = session.get("contrib_role") == "lead" or session.get("admin")
+    # A logged-in contributor's own role governs, even if this browser also
+    # holds an admin session — never let a stale admin cookie grant a writer
+    # lead controls (see require_lead for the same rule on other routes).
+    if session.get("contrib_id"):
+        is_lead = session.get("contrib_role") == "lead"
+    else:
+        is_lead = bool(session.get("admin"))
     is_owner = draft["assigned_to"] == (me["id"] if me else None)
     if not is_lead and not is_owner:
         abort(403)
@@ -800,23 +812,34 @@ def contrib_day(draft_id):
 
         if action in ("save", "submit") and (writer_can_edit or is_lead):
             verse = request.form.get("verse", "").strip()
-            texts = request.form.getlist("q_text")
-            verses = request.form.getlist("q_verse")
-            questions = []
-            for text, q_verse in zip(texts, verses):
-                text, q_verse = text.strip(), q_verse.strip()
-                if text or q_verse:
-                    questions.append({"text": text, "verse": q_verse})
+
+            # Pertanyaan needs its own chosen verse per question only for AY
+            # ("Pertanyaan Perenungan Ayat"); Umum's Pertanyaan is plain text.
+            if division == "ay":
+                texts = request.form.getlist("q_text")
+                verses = request.form.getlist("q_verse")
+                questions = []
+                for text, q_verse in zip(texts, verses):
+                    text, q_verse = text.strip(), q_verse.strip()
+                    if text or q_verse:
+                        questions.append({"text": text, "verse": q_verse})
+            else:
+                questions = [
+                    {"text": line.strip(), "verse": ""}
+                    for line in request.form.get("questions_plain", "").splitlines()
+                    if line.strip()
+                ]
             aplikasi = [a.strip() for a in request.form.get("aplikasi", "").splitlines() if a.strip()]
 
             if action == "submit":
-                missing = [q for q in questions if q["text"] and not q["verse"]]
                 if not verse:
                     flash("Choose the day's reference verse before submitting.")
                     return redirect(url_for("contrib_day", draft_id=draft_id))
-                if missing:
-                    flash("Choose a reference verse for every Pertanyaan before submitting.")
-                    return redirect(url_for("contrib_day", draft_id=draft_id))
+                if division == "ay":
+                    missing = [q for q in questions if q["text"] and not q["verse"]]
+                    if missing:
+                        flash("Choose a reference verse for every Pertanyaan before submitting.")
+                        return redirect(url_for("contrib_day", draft_id=draft_id))
 
             new_status = "submitted" if action == "submit" else draft["status"]
             if new_status == "unassigned":
