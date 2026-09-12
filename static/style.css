@@ -147,7 +147,7 @@ body {
   border-radius: 999px;
   width: fit-content;
 }
-.viewtoggle button {
+.viewtoggle button, .viewtoggle a {
   border: none;
   background: transparent;
   color: var(--muted);
@@ -156,8 +156,9 @@ body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
 }
-.viewtoggle button.active { background: var(--accent); color: #fff; }
+.viewtoggle button.active, .viewtoggle a.active { background: var(--accent); color: #fff; }
 
 /* ---- Embedded PDF (rendered by PDF.js) ---- */
 .pdfpages { margin-top: 16px; }

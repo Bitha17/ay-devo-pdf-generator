@@ -2,12 +2,18 @@
 {% block title %}Admin · Contributors{% endblock %}
 {% block content %}
 <div style="display:flex;align-items:center;gap:12px">
-  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Writers &amp; leads (Umum)</h2>
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Writers &amp; leads</h2>
+  <a class="iconbtn" href="{{ url_for('admin') }}">AY admin</a>
   <a class="iconbtn" href="{{ url_for('admin_umum') }}">Umum admin</a>
   <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
 </div>
 
-<p class="sub" style="color:var(--muted);font-size:13px">
+<div class="viewtoggle">
+  <a href="{{ url_for('admin_contributors', division='ay') }}" class="{% if division == 'ay' %}active{% endif %}">AY</a>
+  <a href="{{ url_for('admin_contributors', division='umum') }}" class="{% if division == 'umum' %}active{% endif %}">Umum</a>
+</div>
+
+<p class="sub" style="color:var(--muted);font-size:13px;margin-top:12px">
   Writers draft one day each; leads review, request changes, approve, and
   publish. Give each person their own login at
   <code>{{ url_for('contrib_login', _external=True) }}</code>.
@@ -18,6 +24,11 @@
   <input type="text" name="name" required>
   <label>Email</label>
   <input type="email" name="email" required>
+  <label>Division</label>
+  <select name="division">
+    <option value="ay" {% if division == 'ay' %}selected{% endif %}>AY</option>
+    <option value="umum" {% if division == 'umum' %}selected{% endif %}>Umum</option>
+  </select>
   <label>Role</label>
   <select name="role">
     <option value="writer">Writer</option>
@@ -28,7 +39,7 @@
   <div class="actions"><button class="btn primary" type="submit">Add contributor</button></div>
 </form>
 
-<h3 style="margin-top:28px">All contributors</h3>
+<h3 style="margin-top:28px">{{ division.upper() }} contributors</h3>
 {% if not contributors %}
   <p style="color:var(--muted)">None yet.</p>
 {% else %}

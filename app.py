@@ -644,7 +644,12 @@ def admin_umum_download(slug):
 @app.route("/admin/contributors")
 @require_admin
 def admin_contributors():
-    return render_template("admin_contributors.html", contributors=db.list_contributors())
+    division = request.args.get("division", "umum")
+    if division not in ("ay", "umum"):
+        division = "umum"
+    return render_template(
+        "admin_contributors.html", contributors=db.list_contributors(division), division=division,
+    )
 
 
 @app.route("/admin/contributors/add", methods=["POST"])
@@ -653,24 +658,27 @@ def admin_contributors_add():
     name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip()
     role = request.form.get("role", "").strip()
+    division = request.form.get("division", "").strip()
     password = request.form.get("password", "")
-    if not name or not email or role not in ("writer", "lead") or len(password) < 6:
-        flash("Fill in a name, valid email, role, and a password of at least 6 characters.")
-        return redirect(url_for("admin_contributors"))
+    if (not name or not email or role not in ("writer", "lead")
+            or division not in ("ay", "umum") or len(password) < 6):
+        flash("Fill in a name, valid email, role, division, and a password of at least 6 characters.")
+        return redirect(url_for("admin_contributors", division=division or "umum"))
     if db.get_contributor_by_email(email):
         flash(f"{email} is already a contributor.")
-        return redirect(url_for("admin_contributors"))
-    db.create_contributor(name, email, generate_password_hash(password), role)
-    flash(f"Added {name} as a {role}.")
-    return redirect(url_for("admin_contributors"))
+        return redirect(url_for("admin_contributors", division=division))
+    db.create_contributor(name, email, generate_password_hash(password), role, division)
+    flash(f"Added {name} as a {division.upper()} {role}.")
+    return redirect(url_for("admin_contributors", division=division))
 
 
 @app.route("/admin/contributors/<int:contributor_id>/delete", methods=["POST"])
 @require_admin
 def admin_contributors_delete(contributor_id):
+    contributor = db.get_contributor(contributor_id)
     db.delete_contributor(contributor_id)
     flash("Contributor removed.")
-    return redirect(url_for("admin_contributors"))
+    return redirect(url_for("admin_contributors", division=contributor["division"] if contributor else "umum"))
 
 
 @app.route("/contrib/login", methods=["GET", "POST"])
@@ -682,6 +690,7 @@ def contrib_login():
         if contributor and check_password_hash(contributor["password_hash"], password):
             session["contrib_id"] = contributor["id"]
             session["contrib_role"] = contributor["role"]
+            session["contrib_division"] = contributor["division"]
             return redirect(request.args.get("next") or url_for("contrib_dashboard"))
         flash("Wrong email or password.")
     return render_template("contrib_login.html")
@@ -691,6 +700,7 @@ def contrib_login():
 def contrib_logout():
     session.pop("contrib_id", None)
     session.pop("contrib_role", None)
+    session.pop("contrib_division", None)
     return redirect(url_for("contrib_login"))
 
 
@@ -698,32 +708,47 @@ def contrib_logout():
 @require_contributor
 def contrib_dashboard():
     me = current_contributor()
+    division = session.get("contrib_division", "umum")
     if session.get("contrib_role") == "lead":
-        weeks = db.list_weeks()
+        weeks = db.list_weeks(division)
         for w in weeks:
             w["days"] = db.list_day_drafts(w["id"])
         return render_template(
-            "contrib_lead.html", me=me, weeks=weeks,
-            writers=[c for c in db.list_contributors() if c["role"] == "writer"],
+            "contrib_lead.html", me=me, weeks=weeks, division=division,
+            writers=[c for c in db.list_contributors(division) if c["role"] == "writer"],
         )
     days = db.list_assigned_drafts(me["id"])
-    return render_template("contrib_writer.html", me=me, days=days)
+    return render_template("contrib_writer.html", me=me, days=days, division=division)
 
 
 @app.route("/contrib/weeks/new", methods=["POST"])
 @require_lead
 def contrib_week_new():
+    division = session.get("contrib_division", "umum")
     start_str = request.form.get("start_date", "").strip()
     try:
         start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
     except ValueError:
         flash("Pick a valid start date.")
         return redirect(url_for("contrib_dashboard"))
+    # Umum weeks run Senin->Minggu (start on a Monday); AY weeks run
+    # Minggu->Sabtu (start on a Sunday) — matching how each division's own
+    # source docs are laid out (see admin.html's AY format guide).
+    if division == "ay":
+        if start_date.weekday() != 6:
+            flash("AY weeks always start on a Sunday — pick a Sunday date.")
+            return redirect(url_for("contrib_dashboard"))
+        day_names = ["Minggu"] + DAY_NAMES_ID[:-1]
+    else:
+        if start_date.weekday() != 0:
+            flash("Umum weeks always start on a Monday — pick a Monday date.")
+            return redirect(url_for("contrib_dashboard"))
+        day_names = DAY_NAMES_ID
     day_specs = [
         (name, format_id_date(start_date + timedelta(days=i), name))
-        for i, name in enumerate(DAY_NAMES_ID)
+        for i, name in enumerate(day_names)
     ]
-    week_id = db.create_week(start_date, day_specs)
+    week_id = db.create_week(start_date, day_specs, division)
     flash("New week created — assign writers to each day.")
     return redirect(url_for("contrib_week", week_id=week_id))
 
@@ -735,8 +760,8 @@ def contrib_week(week_id):
     if not week:
         abort(404)
     days = db.list_day_drafts(week_id)
-    writers = [c for c in db.list_contributors() if c["role"] == "writer"]
-    contributors_by_id = {c["id"]: c for c in db.list_contributors()}
+    writers = [c for c in db.list_contributors(week["division"]) if c["role"] == "writer"]
+    contributors_by_id = {c["id"]: c for c in db.list_contributors(week["division"])}
     return render_template(
         "contrib_week.html", week=week, days=days, writers=writers,
         contributors_by_id=contributors_by_id,
@@ -760,6 +785,8 @@ def contrib_day(draft_id):
     draft = db.get_day_draft(draft_id)
     if not draft:
         abort(404)
+    week = db.get_week(draft["week_id"])
+    division = week["division"]
     me = current_contributor()
     is_lead = session.get("contrib_role") == "lead" or session.get("admin")
     is_owner = draft["assigned_to"] == (me["id"] if me else None)
@@ -780,6 +807,7 @@ def contrib_day(draft_id):
                 text, q_verse = text.strip(), q_verse.strip()
                 if text or q_verse:
                     questions.append({"text": text, "verse": q_verse})
+            aplikasi = [a.strip() for a in request.form.get("aplikasi", "").splitlines() if a.strip()]
 
             if action == "submit":
                 missing = [q for q in questions if q["text"] and not q["verse"]]
@@ -801,6 +829,11 @@ def contrib_day(draft_id):
                 firman_kristus=request.form.get("firman_kristus", "").strip(),
                 questions=questions,
                 status=new_status,
+                key_message=request.form.get("key_message", "").strip() if division == "ay" else "",
+                m1=request.form.get("m1", "").strip() if division == "ay" else "",
+                m3=request.form.get("m3", "").strip() if division == "ay" else "",
+                m4=request.form.get("m4", "").strip() if division == "ay" else "",
+                aplikasi=aplikasi if division == "ay" else [],
             )
             flash("Submitted for review." if action == "submit" else "Draft saved.")
 
@@ -819,7 +852,7 @@ def contrib_day(draft_id):
         return redirect(url_for("contrib_day", draft_id=draft_id))
 
     return render_template(
-        "contrib_day.html", draft=draft, is_lead=is_lead,
+        "contrib_day.html", draft=draft, is_lead=is_lead, division=division,
         writer_can_edit=is_lead or writer_can_edit,
     )
 
@@ -831,6 +864,7 @@ def contrib_week_publish(week_id):
     if not week:
         abort(404)
     days = db.list_day_drafts(week_id)
+    division = week["division"]
 
     if request.method == "POST":
         if any(d["status"] != "approved" for d in days):
@@ -844,27 +878,53 @@ def contrib_week_publish(week_id):
 
         start_date = date.fromisoformat(week["start_date"])
         end_date = start_date + timedelta(days=len(days) - 1)
-        parsed = {
-            "title": request.form.get("title", "").strip(),
-            "week": "",
-            "month": f"{ID_MONTHS_NAME[start_date.month]} {start_date.year}",
-            "period": format_period(start_date, end_date),
-            "days": [
-                {
-                    "date": d["date_str"], "theme": d["theme"], "verse": d["verse"],
-                    "context": d["context"], "firman_kristus": d["firman_kristus"],
-                    "questions": [f"{q['text']} ({q['verse']})" if q["verse"] else q["text"] for q in d["questions"]],
-                }
-                for d in days
-            ],
-            "start_date": week["start_date"],
-        }
+        title = request.form.get("title", "").strip()
+        formatted_questions = [
+            [f"{q['text']} ({q['verse']})" if q["verse"] else q["text"] for q in d["questions"]]
+            for d in days
+        ]
 
-        slug = week["published_slug"] or make_slug_umum(start_date)
+        if division == "ay":
+            parsed = {
+                "title": title,
+                "week": f"Week {start_date.isocalendar()[1]}",
+                "month": f"{ID_MONTHS_NAME[start_date.month]} {start_date.year}",
+                "period": format_period(start_date, end_date),
+                "days": [
+                    {
+                        "date": d["date_str"], "author": "", "theme": d["theme"], "verse": d["verse"],
+                        "key_message": d["key_message"], "context": d["context"],
+                        "firman_kristus": d["firman_kristus"], "m1": d["m1"], "m3": d["m3"], "m4": d["m4"],
+                        "questions": formatted_questions[i], "aplikasi": d["aplikasi"],
+                    }
+                    for i, d in enumerate(days)
+                ],
+            }
+            slug = week["published_slug"] or f"ay-{start_date.isoformat()}"
+        else:
+            parsed = {
+                "title": title, "week": "",
+                "month": f"{ID_MONTHS_NAME[start_date.month]} {start_date.year}",
+                "period": format_period(start_date, end_date),
+                "days": [
+                    {
+                        "date": d["date_str"], "theme": d["theme"], "verse": d["verse"],
+                        "context": d["context"], "firman_kristus": d["firman_kristus"],
+                        "questions": formatted_questions[i],
+                    }
+                    for i, d in enumerate(days)
+                ],
+                "start_date": week["start_date"],
+            }
+            slug = week["published_slug"] or make_slug_umum(start_date)
+
         image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(pdf_cover.filename))
         pdf_cover.save(image_path)
 
-        pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+        if division == "ay":
+            pdf_buffer, _ = generate_pdf_from_data(parsed, image_path, current_bg_path())
+        else:
+            pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
         pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
         with open(pdf_path, "wb") as f:
             f.write(pdf_buffer.getvalue())
@@ -878,7 +938,7 @@ def contrib_week_publish(week_id):
         db.upsert_devotion(
             slug=slug, title=parsed["title"], week=parsed["week"], month=parsed["month"],
             period=parsed["period"], publish_at_utc=publish_at, parsed=parsed,
-            pdf_path=pdf_path, image_path=image_path, hero_path=None, division="umum",
+            pdf_path=pdf_path, image_path=image_path, hero_path=None, division=division,
         )
         db.mark_week_published(week_id, slug)
         flash(f"Published “{parsed['title'] or slug}”.")

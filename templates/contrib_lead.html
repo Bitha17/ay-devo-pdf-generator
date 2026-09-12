@@ -7,17 +7,18 @@
 </div>
 
 <form class="formcard" method="post" action="{{ url_for('contrib_week_new') }}">
-  <label>New week's start date (Monday)</label>
-  <input type="date" name="start_date" required>
+  <label>New week's start date (must be a {{ "Sunday" if division == "ay" else "Monday" }})</label>
+  <input type="date" name="start_date" id="weekStartDate" required>
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
-    Creates 7 unassigned days (Senin–Minggu) ready for writer assignment.
+    {% if division == "ay" %}Creates 7 unassigned days (Minggu–Sabtu){% else %}Creates 7 unassigned days (Senin–Minggu){% endif %}
+    ready for writer assignment.
   </p>
   <div class="actions"><button class="btn primary" type="submit">Create week</button></div>
 </form>
 
 {% if not writers %}
   <p style="color:var(--muted);margin-top:16px">No writers yet — add some in
-  <a href="{{ url_for('admin_contributors') }}">Admin → Contributors</a>.</p>
+  <a href="{{ url_for('admin_contributors', division=division) }}">Admin → Contributors</a>.</p>
 {% endif %}
 
 <h3 style="margin-top:28px">Weeks</h3>
@@ -40,4 +41,31 @@
   {% endfor %}
 </ul>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Umum weeks start on a Monday, AY weeks on a Sunday — snap forward to the
+  // next occurrence of that weekday on or after whatever's picked (never
+  // backward into the past), and default to the coming one.
+  var startInput = document.getElementById("weekStartDate");
+  var TARGET_DAY = {{ 0 if division == "ay" else 1 }};  // JS getDay(): 0=Sun..6=Sat
+  function nextTargetDay(d) {
+    var day = d.getDay();
+    d.setDate(d.getDate() + ((TARGET_DAY - day + 7) % 7));
+    return d;
+  }
+  // NOT toISOString() — that serializes in UTC, which rolls back to the
+  // previous day for any timezone ahead of UTC (e.g. WIB, UTC+7).
+  function iso(d) {
+    var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+  startInput.value = iso(nextTargetDay(new Date()));
+  startInput.addEventListener("change", function () {
+    if (!this.value) return;
+    var d = new Date(this.value + "T00:00:00");
+    this.value = iso(nextTargetDay(d));
+  });
+</script>
 {% endblock %}

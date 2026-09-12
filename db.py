@@ -76,12 +76,39 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS umum_weeks (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                start_date     TEXT UNIQUE NOT NULL,   -- ISO date of the first day
+                division       TEXT NOT NULL DEFAULT 'umum',
+                start_date     TEXT NOT NULL,   -- ISO date of the first day
                 created_at     TEXT NOT NULL,
-                published_slug TEXT                     -- set once this week is published
+                published_slug TEXT,             -- set once this week is published
+                UNIQUE(division, start_date)
             )
             """
         )
+        # Migrate a pre-AY-support DB: it has UNIQUE(start_date) alone (no
+        # division column), which would collide once AY and Umum can both
+        # have a week starting the same Monday. SQLite can't drop a
+        # constraint in place, so recreate the table.
+        week_cols = [r["name"] for r in conn.execute("PRAGMA table_info(umum_weeks)")]
+        if "division" not in week_cols:
+            conn.execute("ALTER TABLE umum_weeks RENAME TO umum_weeks_old")
+            conn.execute(
+                """
+                CREATE TABLE umum_weeks (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    division       TEXT NOT NULL DEFAULT 'umum',
+                    start_date     TEXT NOT NULL,
+                    created_at     TEXT NOT NULL,
+                    published_slug TEXT,
+                    UNIQUE(division, start_date)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO umum_weeks (id, division, start_date, created_at, published_slug) "
+                "SELECT id, 'umum', start_date, created_at, published_slug FROM umum_weeks_old"
+            )
+            conn.execute("DROP TABLE umum_weeks_old")
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS day_drafts (
@@ -99,12 +126,24 @@ def init_db():
                 context        TEXT NOT NULL DEFAULT '',
                 firman_kristus TEXT NOT NULL DEFAULT '',
                 questions_json TEXT NOT NULL DEFAULT '[]',
+                -- AY-only fields; stay blank/'[]' for Umum days.
+                key_message    TEXT NOT NULL DEFAULT '',
+                m1             TEXT NOT NULL DEFAULT '',
+                m3             TEXT NOT NULL DEFAULT '',
+                m4             TEXT NOT NULL DEFAULT '',
+                aplikasi_json  TEXT NOT NULL DEFAULT '[]',
                 review_notes   TEXT NOT NULL DEFAULT '',
                 updated_at     TEXT NOT NULL,
                 UNIQUE(week_id, day_index)
             )
             """
         )
+        draft_cols = [r["name"] for r in conn.execute("PRAGMA table_info(day_drafts)")]
+        for col in ("key_message", "m1", "m3", "m4"):
+            if col not in draft_cols:
+                conn.execute(f"ALTER TABLE day_drafts ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+        if "aplikasi_json" not in draft_cols:
+            conn.execute("ALTER TABLE day_drafts ADD COLUMN aplikasi_json TEXT NOT NULL DEFAULT '[]'")
 
 
 def _now_iso():
@@ -261,13 +300,13 @@ def delete_contributor(contributor_id):
 
 
 # ------------------------------------------------------ umum weeks & day drafts
-def create_week(start_date, day_specs):
+def create_week(start_date, day_specs, division="umum"):
     """day_specs: list of (day_name, date_str) in order. Creates the week and
     one unassigned day_draft per entry. Returns the new week's id."""
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO umum_weeks (start_date, created_at) VALUES (?, ?)",
-            (start_date.isoformat(), _now_iso()),
+            "INSERT INTO umum_weeks (division, start_date, created_at) VALUES (?, ?, ?)",
+            (division, start_date.isoformat(), _now_iso()),
         )
         week_id = cur.lastrowid
         for i, (day_name, date_str) in enumerate(day_specs):
@@ -279,10 +318,10 @@ def create_week(start_date, day_specs):
     return week_id
 
 
-def list_weeks():
+def list_weeks(division="umum"):
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM umum_weeks ORDER BY start_date DESC"
+            "SELECT * FROM umum_weeks WHERE division = ? ORDER BY start_date DESC", (division,)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -315,25 +354,24 @@ def _normalize_questions(raw_list):
     return out
 
 
+def _hydrate_draft(d):
+    d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
+    d["aplikasi"] = json.loads(d.pop("aplikasi_json"))
+    return d
+
+
 def list_day_drafts(week_id):
     with _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM day_drafts WHERE week_id = ? ORDER BY day_index", (week_id,)
         ).fetchall()
-    days = [dict(r) for r in rows]
-    for d in days:
-        d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
-    return days
+    return [_hydrate_draft(dict(r)) for r in rows]
 
 
 def get_day_draft(draft_id):
     with _connect() as conn:
         row = conn.execute("SELECT * FROM day_drafts WHERE id = ?", (draft_id,)).fetchone()
-    if not row:
-        return None
-    d = dict(row)
-    d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
-    return d
+    return _hydrate_draft(dict(row)) if row else None
 
 
 def list_assigned_drafts(contributor_id):
@@ -348,10 +386,7 @@ def list_assigned_drafts(contributor_id):
             """,
             (contributor_id,),
         ).fetchall()
-    days = [dict(r) for r in rows]
-    for d in days:
-        d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
-    return days
+    return [_hydrate_draft(dict(r)) for r in rows]
 
 
 def assign_draft(draft_id, contributor_id):
@@ -363,15 +398,20 @@ def assign_draft(draft_id, contributor_id):
         )
 
 
-def save_draft_content(draft_id, theme, verse, context, firman_kristus, questions, status):
+def save_draft_content(draft_id, theme, verse, context, firman_kristus, questions, status,
+                        key_message="", m1="", m3="", m4="", aplikasi=None):
+    """key_message/m1/m3/m4/aplikasi are AY-only fields; left at their
+    defaults, an Umum day's row simply keeps them blank."""
     with _connect() as conn:
         conn.execute(
             """
             UPDATE day_drafts SET theme=?, verse=?, context=?, firman_kristus=?,
-                questions_json=?, status=?, updated_at=?
+                questions_json=?, key_message=?, m1=?, m3=?, m4=?, aplikasi_json=?,
+                status=?, updated_at=?
             WHERE id = ?
             """,
             (theme, verse, context, firman_kristus, json.dumps(questions, ensure_ascii=False),
+             key_message, m1, m3, m4, json.dumps(aplikasi or [], ensure_ascii=False),
              status, _now_iso(), draft_id),
         )
 

@@ -16,19 +16,26 @@
   <label>Theme</label>
   <input type="text" name="theme" value="{{ draft.theme }}" required>
 
-  <label>Bible reference</label>
+  <label>Bible reference (Ayat Bacaan)</label>
   <input type="hidden" id="verse_main" name="verse" value="{{ draft.verse }}">
   <div class="versepicker" data-target="verse_main"></div>
 
-  <label>Konteks</label>
+  {% if division == "ay" %}
+  <label>M1 (opening prayer prompt)</label>
+  <textarea name="m1" rows="2">{{ draft.m1 }}</textarea>
+  <label>Key Message</label>
+  <textarea name="key_message" rows="3">{{ draft.key_message }}</textarea>
+  {% endif %}
+
+  <label>Konteks{% if division == "ay" %} (Segment 1){% endif %}</label>
   <textarea name="context" rows="6">{{ draft.context }}</textarea>
-  <label>Firman Kristus</label>
+  <label>Firman Kristus{% if division == "ay" %} (Segment 2){% endif %}</label>
   <textarea name="firman_kristus" rows="6">{{ draft.firman_kristus }}</textarea>
   <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
     Use &lt;b&gt;bold&lt;/b&gt; / &lt;i&gt;italic&lt;/i&gt; for inline formatting in Konteks/Firman Kristus.
   </p>
 
-  <label>Pertanyaan — each question needs its own chosen reference verse</label>
+  <label>Pertanyaan Perenungan Ayat — each question needs its own chosen reference verse</label>
   <div id="questionsList">
     {% for q in (draft.questions or [{"text": "", "verse": ""}]) %}
     <div class="qblock">
@@ -41,6 +48,15 @@
   </div>
   <div class="actions"><button class="btn" type="button" id="addQuestion">+ Add question</button></div>
 
+  {% if division == "ay" %}
+  <label>Aplikasi (one item per line)</label>
+  <textarea name="aplikasi" rows="4">{{ draft.aplikasi | join('\n') }}</textarea>
+  <label>M3 (response after receiving Firman Kristus)</label>
+  <textarea name="m3" rows="3">{{ draft.m3 }}</textarea>
+  <label>M4 (share prompt)</label>
+  <textarea name="m4" rows="2">{{ draft.m4 }}</textarea>
+  {% endif %}
+
   <div class="actions">
     <button class="btn" type="submit" name="action" value="save">Save draft</button>
     <button class="btn primary" type="submit" name="action" value="submit">Submit for review</button>
@@ -50,12 +66,17 @@
 <div class="preview">
   <h3 style="margin-top:0">{{ draft.theme }}</h3>
   <p><em>{{ draft.verse }}</em></p>
+  {% if draft.key_message %}<h4>Key Message</h4><p>{{ draft.key_message | markup }}</p>{% endif %}
+  {% if draft.m1 %}<p><em>{{ draft.m1 | markup }}</em></p>{% endif %}
   {% if draft.context %}<h4>Konteks</h4>{% for para in draft.context.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}{% endif %}
   {% if draft.firman_kristus %}<h4>Firman Kristus</h4>{% for para in draft.firman_kristus.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}{% endif %}
   {% if draft.questions %}
-  <h4>Pertanyaan</h4>
+  <h4>Pertanyaan Perenungan Ayat</h4>
   <ol>{% for q in draft.questions %}<li>{{ q.text | markup }} {% if q.verse %}<em>({{ q.verse }})</em>{% endif %}</li>{% endfor %}</ol>
   {% endif %}
+  {% if draft.aplikasi %}<h4>Aplikasi</h4><ol>{% for a in draft.aplikasi %}<li>{{ a | markup }}</li>{% endfor %}</ol>{% endif %}
+  {% if draft.m3 %}<h4>M3</h4><p>{{ draft.m3 | markup }}</p>{% endif %}
+  {% if draft.m4 %}<p>{{ draft.m4 | markup }}</p>{% endif %}
 </div>
 <p class="sub" style="color:var(--muted)">
   {% if draft.status == "submitted" %}Waiting for a lead to review.{% else %}Approved — locked from further edits.{% endif %}
