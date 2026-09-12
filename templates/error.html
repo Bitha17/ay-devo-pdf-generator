@@ -1,0 +1,9 @@
+{% extends "base_umum.html" %}
+{% block title %}{{ code }}{% endblock %}
+{% block content %}
+<div class="formcard" style="text-align:center;margin-top:48px">
+  <h2 style="margin-top:0">{{ code }}</h2>
+  <p>{{ message }}</p>
+  <div class="actions" style="justify-content:center"><a class="btn primary" href="{{ url_for('index') }}">Return home</a></div>
+</div>
+{% endblock %}

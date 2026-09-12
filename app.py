@@ -15,6 +15,7 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from parser import parse_txt_file, parse_docx_paragraphs as parse_ay_docx_paragraphs
 from parser_umum import parse_docx_file
@@ -44,12 +45,16 @@ if ADMIN_PASSWORD in _INSECURE or SECRET_KEY in _INSECURE:
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+# Reject oversized multipart requests before they are written to disk. This
+# can be raised with DEVO_MAX_UPLOAD_MB for deployments that need a larger cap.
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("DEVO_MAX_UPLOAD_MB", "20")) * 1024 * 1024
 
 # Publish times are entered in this timezone, stored/compared in UTC.
 LOCAL_TZ = ZoneInfo(os.environ.get("DEVO_TZ", "Asia/Jakarta"))
 
 FIXED_BG = "static/bg.png"            # bundled default later-pages background
 ACTIVE_BG = os.path.join(db.DATA_DIR, "bg.png")  # admin-uploaded override (persisted)
+UPLOAD_EXTENSIONS = {"document": {".txt", ".docx"}, "docx": {".docx"}, "image": {".png", ".jpg", ".jpeg"}}
 
 
 # ---------------------------------------------------------------- helpers
@@ -148,9 +153,66 @@ def valid_email(value):
     return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value))
 
 
+def uploaded_file(field, kind, required=True):
+    """Return a validated upload or None after a user-facing form error."""
+    file = request.files.get(field)
+    if not file or not file.filename:
+        if required:
+            flash(f"Choose a {kind} file first.")
+        return None
+    suffix = os.path.splitext(secure_filename(file.filename).lower())[1]
+    if suffix not in UPLOAD_EXTENSIONS[kind]:
+        allowed = ", ".join(sorted(UPLOAD_EXTENSIONS[kind]))
+        flash(f"Invalid file type. Choose one of: {allowed}.")
+        return None
+    return file
+
+
+def parse_publish_at(value, fallback=None):
+    """Parse a local HTML datetime value without letting malformed input 500."""
+    if not value:
+        return fallback or datetime.now(timezone.utc)
+    try:
+        return datetime.fromisoformat(value).replace(tzinfo=LOCAL_TZ)
+    except ValueError:
+        return None
+
+
+def save_pdf_atomically(buffer, destination):
+    """Avoid replacing a working PDF with a half-written file."""
+    temporary = f"{destination}.tmp"
+    try:
+        with open(temporary, "wb") as f:
+            f.write(buffer.getvalue())
+        os.replace(temporary, destination)
+    finally:
+        _delete_file(temporary)
+
+
 @app.context_processor
 def template_permissions():
     return {"is_super_admin": bool(session.get("admin"))}
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def upload_too_large(error):
+    return render_template("error.html", code=413, message="The upload is too large. Choose files totalling less than the configured upload limit."), 413
+
+
+@app.errorhandler(403)
+def forbidden(error):
+    return render_template("error.html", code=403, message="You do not have permission to open this page."), 403
+
+
+@app.errorhandler(404)
+def not_found(error):
+    return render_template("error.html", code=404, message="This page or file is unavailable."), 404
+
+
+@app.errorhandler(500)
+def server_error(error):
+    app.logger.exception("Unhandled application error", exc_info=error)
+    return render_template("error.html", code=500, message="Something went wrong. Please try again; if it continues, contact an administrator."), 500
 
 
 def to_local(iso_utc):
@@ -379,25 +441,34 @@ def admin():
 @app.route("/admin/upload", methods=["POST"])
 @require_content_admin("ay")
 def admin_upload():
-    txt_file = request.files["txt"]
-    pdf_cover = request.files.get("pdf_cover")   # mandatory: PDF first page
-    web_hero = request.files.get("web_hero")     # optional: web title banner
+    txt_file = uploaded_file("txt", "document")
+    pdf_cover = uploaded_file("pdf_cover", "image", required=False)
+    web_hero = uploaded_file("web_hero", "image", required=False)
+    if (not txt_file
+            or (request.files.get("pdf_cover") and request.files["pdf_cover"].filename and not pdf_cover)
+            or (request.files.get("web_hero") and request.files["web_hero"].filename and not web_hero)):
+        return redirect(url_for("admin"))
     publish_local = request.form.get("publish_at", "").strip()
 
     # Persist uploads to disk.
     txt_path = os.path.join(db.UPLOAD_DIR, secure_filename(txt_file.filename))
-    txt_file.save(txt_path)
-
-    # .docx: same field-label format, but bold/italic come from real Word
-    # formatting instead of literal <b>/<i> tags.
-    if txt_path.lower().endswith(".docx"):
-        paragraphs = extract_docx_paragraphs(txt_path)
-        parsed = parse_ay_docx_paragraphs(paragraphs)
-        raw_text = "\n".join(p["plain"] for p in paragraphs)
-    else:
-        parsed = parse_txt_file(txt_path)
-        with open(txt_path, encoding="utf-8-sig") as f:
-            raw_text = f.read()
+    try:
+        txt_file.save(txt_path)
+        # .docx: same field-label format, but bold/italic come from real Word
+        # formatting instead of literal <b>/<i> tags.
+        if txt_path.lower().endswith(".docx"):
+            paragraphs = extract_docx_paragraphs(txt_path)
+            parsed = parse_ay_docx_paragraphs(paragraphs)
+            raw_text = "\n".join(p["plain"] for p in paragraphs)
+        else:
+            parsed = parse_txt_file(txt_path)
+            with open(txt_path, encoding="utf-8-sig") as f:
+                raw_text = f.read()
+    except (OSError, UnicodeError, ValueError, KeyError, IndexError):
+        _delete_file(txt_path)
+        app.logger.exception("Could not parse AY upload")
+        flash("Could not read that document. Check its format and try again.")
+        return redirect(url_for("admin"))
 
     slug = make_slug(parsed["week"], parsed["month"])
 
@@ -419,19 +490,21 @@ def admin_upload():
         hero_path = os.path.join(db.UPLOAD_DIR, f"{slug}_hero_" + secure_filename(web_hero.filename))
         web_hero.save(hero_path)
 
-    # Generate the PDF once, at publish time, and store it on disk. `parsed`
-    # is already parsed above (from either .txt or .docx), so render from
-    # that rather than re-parsing the file.
-    pdf_buffer, pdf_name = generate_pdf_from_data(parsed, cover_for_pdf, current_bg_path())
     pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_buffer.getvalue())
+    try:
+        # Generate from parsed data and replace the live PDF only on success.
+        pdf_buffer, _ = generate_pdf_from_data(parsed, cover_for_pdf, current_bg_path())
+        save_pdf_atomically(pdf_buffer, pdf_path)
+    except (OSError, ValueError):
+        app.logger.exception("Could not generate AY PDF")
+        flash("Could not generate the PDF. The existing published devotion was not changed.")
+        return redirect(url_for("admin"))
 
     # Interpret the entered time as LOCAL_TZ; default to now if blank.
-    if publish_local:
-        publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
-    else:
-        publish_at = datetime.now(timezone.utc)
+    publish_at = parse_publish_at(publish_local)
+    if not publish_at:
+        flash("Choose a valid publication date and time.")
+        return redirect(url_for("admin"))
 
     db.upsert_devotion(
         slug=slug, title=title, week=parsed["week"], month=parsed["month"],
@@ -507,18 +580,22 @@ def admin_edit_save(slug):
 
     # Publish time (WIB); blank keeps the existing time.
     publish_local = request.form.get("publish_at", "").strip()
-    if publish_local:
-        publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
-    else:
-        publish_at = datetime.fromisoformat(dev["publish_at"])
+    publish_at = parse_publish_at(publish_local, datetime.fromisoformat(dev["publish_at"]))
+    if not publish_at:
+        flash("Choose a valid publication date and time.")
+        return redirect(url_for("admin_edit", slug=slug))
 
     # Regenerate the PDF from canonical data only when text or cover changed.
     pdf_path = dev["pdf_path"] or os.path.join(db.PDF_DIR, f"{slug}.pdf")
     if regen_pdf:
-        cover_for_pdf = image_path or os.path.join(BASE_DIR, FIXED_BG)
-        buffer, _ = generate_pdf_from_data(parsed, cover_for_pdf, current_bg_path())
-        with open(pdf_path, "wb") as f:
-            f.write(buffer.getvalue())
+        try:
+            cover_for_pdf = image_path or os.path.join(BASE_DIR, FIXED_BG)
+            buffer, _ = generate_pdf_from_data(parsed, cover_for_pdf, current_bg_path())
+            save_pdf_atomically(buffer, pdf_path)
+        except (OSError, ValueError):
+            app.logger.exception("Could not regenerate AY PDF")
+            flash("Could not regenerate the PDF. Your existing devotion was not changed.")
+            return redirect(url_for("admin_edit", slug=slug))
 
     db.upsert_devotion(
         slug=slug, title=title, week=week, month=month, period=period,
@@ -559,11 +636,15 @@ def admin_download(slug):
 def admin_background():
     """Replace the content-page background. Affects FUTURE PDFs only; existing
     PDFs are kept as they are (use /admin/regenerate to update them)."""
-    bg = request.files.get("bg")
-    if not bg or not bg.filename:
-        flash("No background image selected.")
+    bg = uploaded_file("bg", "image")
+    if not bg:
         return redirect(url_for("admin"))
-    bg.save(ACTIVE_BG)
+    try:
+        bg.save(ACTIVE_BG)
+    except OSError:
+        app.logger.exception("Could not save AY background")
+        flash("Could not save that background image. Try again.")
+        return redirect(url_for("admin"))
     flash("Background updated — new PDFs will use it. Existing PDFs are unchanged.")
     return redirect(url_for("admin"))
 
@@ -593,37 +674,47 @@ def admin_umum():
 @app.route("/admin/umum/upload", methods=["POST"])
 @require_content_admin("umum")
 def admin_umum_upload():
-    docx_file = request.files["docx"]
-    pdf_cover = request.files["pdf_cover"]   # mandatory: PDF first page
+    docx_file = uploaded_file("docx", "docx")
+    pdf_cover = uploaded_file("pdf_cover", "image")
+    if not docx_file or not pdf_cover:
+        return redirect(url_for("admin_umum"))
     start_date_str = request.form.get("start_date", "").strip()
     publish_local = request.form.get("publish_at", "").strip()
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
+    except ValueError:
+        flash("Choose a valid week start date.")
+        return redirect(url_for("admin_umum"))
 
     docx_path = os.path.join(db.UPLOAD_DIR, secure_filename(docx_file.filename))
-    docx_file.save(docx_path)
-
     try:
+        docx_file.save(docx_path)
         parsed = parse_docx_file(docx_path, start_date)
-    except ValueError as e:
+    except (OSError, ValueError, KeyError, IndexError):
         _delete_file(docx_path)
-        flash(str(e))
+        app.logger.exception("Could not parse Umum upload")
+        flash("Could not read that document. Check its format and dates, then try again.")
         return redirect(url_for("admin_umum"))
     slug = make_slug_umum(date.fromisoformat(parsed["start_date"]))
 
     title = request.form.get("title", "").strip() or parsed["title"]
 
     image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(pdf_cover.filename))
-    pdf_cover.save(image_path)
-
-    pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
     pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
-    with open(pdf_path, "wb") as f:
-        f.write(pdf_buffer.getvalue())
+    try:
+        pdf_cover.save(image_path)
+        pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+        save_pdf_atomically(pdf_buffer, pdf_path)
+    except (OSError, ValueError):
+        _delete_file(image_path)
+        app.logger.exception("Could not generate Umum PDF")
+        flash("Could not generate the PDF. No devotion was published.")
+        return redirect(url_for("admin_umum"))
 
-    if publish_local:
-        publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
-    else:
-        publish_at = datetime.now(timezone.utc)
+    publish_at = parse_publish_at(publish_local)
+    if not publish_at:
+        flash("Choose a valid publication date and time.")
+        return redirect(url_for("admin_umum"))
 
     db.upsert_devotion(
         slug=slug, title=title, week=parsed["week"], month=parsed["month"],
@@ -690,16 +781,20 @@ def admin_umum_edit_save(slug):
     title = request.form.get("title", dev["title"]).strip()
 
     publish_local = request.form.get("publish_at", "").strip()
-    if publish_local:
-        publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
-    else:
-        publish_at = datetime.fromisoformat(dev["publish_at"])
+    publish_at = parse_publish_at(publish_local, datetime.fromisoformat(dev["publish_at"]))
+    if not publish_at:
+        flash("Choose a valid publication date and time.")
+        return redirect(url_for("admin_umum_edit", slug=slug))
 
     pdf_path = dev["pdf_path"] or os.path.join(db.PDF_DIR, f"{slug}.pdf")
     if regen_pdf:
-        buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
-        with open(pdf_path, "wb") as f:
-            f.write(buffer.getvalue())
+        try:
+            buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+            save_pdf_atomically(buffer, pdf_path)
+        except (OSError, ValueError):
+            app.logger.exception("Could not regenerate Umum PDF")
+            flash("Could not regenerate the PDF. Your existing devotion was not changed.")
+            return redirect(url_for("admin_umum_edit", slug=slug))
 
     db.upsert_devotion(
         slug=slug, title=title, week=week, month=month, period=period,
@@ -1024,9 +1119,8 @@ def contrib_week_publish(week_id):
             flash("Every day must be approved before publishing.")
             return redirect(url_for("contrib_week", week_id=week_id))
 
-        pdf_cover = request.files.get("pdf_cover")
-        if not pdf_cover or not pdf_cover.filename:
-            flash("A PDF cover image is required to publish.")
+        pdf_cover = uploaded_file("pdf_cover", "image")
+        if not pdf_cover:
             return redirect(url_for("contrib_week_publish", week_id=week_id))
 
         start_date = date.fromisoformat(week["start_date"])
@@ -1071,22 +1165,26 @@ def contrib_week_publish(week_id):
             }
             slug = week["published_slug"] or make_slug_umum(start_date)
 
-        image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(pdf_cover.filename))
-        pdf_cover.save(image_path)
-
-        if division == "ay":
-            pdf_buffer, _ = generate_pdf_from_data(parsed, image_path, current_bg_path())
-        else:
-            pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
         pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_buffer.getvalue())
+        image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(pdf_cover.filename))
+        try:
+            pdf_cover.save(image_path)
+            if division == "ay":
+                pdf_buffer, _ = generate_pdf_from_data(parsed, image_path, current_bg_path())
+            else:
+                pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+            save_pdf_atomically(pdf_buffer, pdf_path)
+        except (OSError, ValueError):
+            _delete_file(image_path)
+            app.logger.exception("Could not publish collaborative devotion")
+            flash("Could not generate the PDF. The week was not published.")
+            return redirect(url_for("contrib_week_publish", week_id=week_id))
 
         publish_local = request.form.get("publish_at", "").strip()
-        if publish_local:
-            publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
-        else:
-            publish_at = datetime.now(timezone.utc)
+        publish_at = parse_publish_at(publish_local)
+        if not publish_at:
+            flash("Choose a valid publication date and time.")
+            return redirect(url_for("contrib_week_publish", week_id=week_id))
 
         db.upsert_devotion(
             slug=slug, title=parsed["title"], week=parsed["week"], month=parsed["month"],

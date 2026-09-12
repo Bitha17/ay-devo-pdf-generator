@@ -110,6 +110,20 @@ There are two ways to supply content:
   content through that division's specific-week and PDF routes. Other users
   receive a 404 until its publication time arrives.
 
+## Failure handling
+
+- `DEVO_MAX_UPLOAD_MB` sets the total multipart upload limit (20 MB by
+  default). The app presents a 413 page instead of accepting oversized files.
+- Uploads are checked for the supported filename extensions before being
+  written: AY source `.txt`/`.docx`, Umum source `.docx`, and artwork
+  `.png`/`.jpg`/`.jpeg`. Parsing, invalid publication dates, disk writes, and
+  PDF rendering return the user to the relevant form with a message; details
+  are written to the server log.
+- PDF writes use a temporary file followed by `os.replace`, so a failed PDF
+  render cannot leave a half-written PDF at the reader-facing path.
+- The app supplies user-facing 403, 404, 413, and 500 pages. The 500 handler
+  logs the underlying exception and intentionally does not expose it to users.
+
 ## Code and storage map
 
 | File or directory | Responsibility |
