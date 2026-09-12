@@ -18,8 +18,10 @@
 
 {% if not writers %}
   <p style="color:var(--muted);margin-top:16px">No writers yet — add some in
-  <a href="{{ url_for('admin_contributors', division=division) }}">Admin → Contributors</a>.</p>
+  the super-admin's Contributors page.</p>
 {% endif %}
+
+<p style="margin-top:16px"><a class="iconbtn" href="{{ url_for('admin' if division == 'ay' else 'admin_umum') }}">Manage PDFs</a></p>
 
 <h3 style="margin-top:28px">Weeks</h3>
 {% if not weeks %}

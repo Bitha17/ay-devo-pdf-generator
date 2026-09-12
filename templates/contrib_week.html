@@ -6,8 +6,10 @@
   <a class="iconbtn" href="{{ url_for('contrib_dashboard') }}">← Weeks</a>
 </div>
 
+<p class="sub" style="color:var(--muted);font-size:13px">Leads can open and edit every assigned or unsubmitted draft below.</p>
+
 {% if week.published_slug %}
-  <p class="flash">Published — <a href="{{ url_for('devotion_umum', slug=week.published_slug) }}" target="_blank">view it live</a>.
+  <p class="flash">Published — <a href="{{ url_for('devotion' if week.division == 'ay' else 'devotion_umum', slug=week.published_slug) }}" target="_blank">view it live</a>.
   Republishing overwrites the same PDF/page.</p>
 {% endif %}
 

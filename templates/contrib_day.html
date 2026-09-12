@@ -7,8 +7,8 @@
 </div>
 <p class="sub" style="color:var(--muted)">{{ draft.date_str }}</p>
 
-{% if draft.review_notes and draft.status == "changes_requested" %}
-<div class="reviewnote"><strong>Changes requested:</strong> {{ draft.review_notes }}</div>
+{% if draft.review_notes %}
+<div class="reviewnote"><strong>{% if draft.status == "changes_requested" %}Changes requested:{% else %}Lead note:{% endif %}</strong> {{ draft.review_notes }}</div>
 {% endif %}
 
 {% if writer_can_edit %}
@@ -62,10 +62,20 @@
   <textarea name="m4" rows="2">{{ draft.m4 }}</textarea>
   {% endif %}
 
+  {% if is_lead %}
+  <label>Private feedback draft</label>
+  <textarea name="feedback_draft" rows="3">{{ draft.feedback_draft }}</textarea>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">This is visible only to leads until you send it from the review panel below.</p>
+  <div class="actions">
+    <button class="btn primary" type="submit" name="action" value="lead_save">Save lead edits</button>
+  </div>
+  {% else %}
   <div class="actions">
     <button class="btn" type="submit" name="action" value="save">Save draft</button>
     <button class="btn primary" type="submit" name="action" value="submit">Submit for review</button>
   </div>
+  <p class="sub" id="autosaveStatus" style="color:var(--muted);font-size:12px;margin:10px 0 0" aria-live="polite">Changes save automatically while you work.</p>
+  {% endif %}
 </form>
 {% else %}
 <div class="preview">
@@ -95,9 +105,10 @@
     <button class="btn primary" type="submit" name="action" value="approve">Approve</button>
   </form>
   <form method="post" style="margin-top:12px">
-    <label>Feedback for the writer (required to request changes)</label>
-    <textarea name="review_notes" rows="3"></textarea>
+    <label>Feedback for the writer</label>
+    <textarea name="review_notes" rows="3">{{ draft.feedback_draft }}</textarea>
     <div class="actions">
+      <button class="btn" type="submit" name="action" value="publish_feedback">Send feedback to writer</button>
       <button class="btn" type="submit" name="action" value="request_changes">Request changes</button>
     </div>
   </form>
@@ -135,5 +146,29 @@
   });
 </script>
 {% endif %}
+{% endif %}
+{% if writer_can_edit and not is_lead %}
+<script>
+  (function () {
+    var form = document.querySelector("form.formcard"), status = document.getElementById("autosaveStatus"), dirty = false, saving = false;
+    function markDirty() { dirty = true; status.textContent = "Unsaved changes…"; }
+    form.addEventListener("input", markDirty);
+    form.addEventListener("change", markDirty);
+    function autosave() {
+      if (!dirty || saving || document.hidden) return;
+      saving = true;
+      status.textContent = "Saving…";
+      var data = new FormData(form);
+      data.set("action", "autosave");
+      fetch(window.location.href, { method: "POST", body: data, credentials: "same-origin" })
+        .then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
+        .then(function () { dirty = false; status.textContent = "Saved automatically."; })
+        .catch(function () { status.textContent = "Could not save automatically. Use Save draft."; })
+        .finally(function () { saving = false; });
+    }
+    window.setInterval(autosave, 20000);
+    window.addEventListener("beforeunload", function () { if (dirty) autosave(); });
+  })();
+</script>
 {% endif %}
 {% endblock %}

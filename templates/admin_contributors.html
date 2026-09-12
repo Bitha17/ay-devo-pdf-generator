@@ -16,7 +16,7 @@
 <p class="sub" style="color:var(--muted);font-size:13px;margin-top:12px">
   Writers draft one day each; leads review, request changes, approve, and
   publish. Give each person their own login at
-  <code>{{ url_for('contrib_login', _external=True) }}</code>.
+  <code>{{ url_for('login', _external=True) }}</code>.
 </p>
 
 <form class="formcard" method="post" action="{{ url_for('admin_contributors_add') }}">
@@ -34,8 +34,8 @@
     <option value="writer">Writer</option>
     <option value="lead">Lead</option>
   </select>
-  <label>Password (min 6 characters)</label>
-  <input type="password" name="password" minlength="6" required>
+  <label>Password (min 10 characters)</label>
+  <input type="password" name="password" minlength="10" required>
   <div class="actions"><button class="btn primary" type="submit">Add contributor</button></div>
 </form>
 
@@ -49,6 +49,28 @@
     <div style="flex:1">
       <span class="title">{{ c.name }}</span>
       <div class="sub">{{ c.email }} · {{ c.role }}</div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;color:var(--muted);font-size:13px">Edit account</summary>
+        <form class="formcard" method="post" action="{{ url_for('admin_contributors_edit', contributor_id=c.id) }}" style="margin:10px 0 0">
+          <label>Name</label>
+          <input type="text" name="name" value="{{ c.name }}" required>
+          <label>Email</label>
+          <input type="email" name="email" value="{{ c.email }}" required>
+          <label>Division</label>
+          <select name="division">
+            <option value="ay" {% if c.division == 'ay' %}selected{% endif %}>AY</option>
+            <option value="umum" {% if c.division == 'umum' %}selected{% endif %}>Umum</option>
+          </select>
+          <label>Role</label>
+          <select name="role">
+            <option value="writer" {% if c.role == 'writer' %}selected{% endif %}>Writer</option>
+            <option value="lead" {% if c.role == 'lead' %}selected{% endif %}>Lead</option>
+          </select>
+          <label>New password (leave blank to keep current password)</label>
+          <input type="password" name="password" minlength="10">
+          <div class="actions"><button class="btn" type="submit">Save account</button></div>
+        </form>
+      </details>
     </div>
     <form method="post" action="{{ url_for('admin_contributors_delete', contributor_id=c.id) }}"
           onsubmit="return confirm('Remove {{ c.name }}? Their assigned days will be unassigned.')">
