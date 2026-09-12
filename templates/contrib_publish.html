@@ -1,0 +1,32 @@
+{% extends "base_umum.html" %}
+{% block title %}Publish week{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Publish week of {{ week.start_date }}</h2>
+  <a class="iconbtn" href="{{ url_for('contrib_week', week_id=week.id) }}">← Back</a>
+</div>
+
+{% set unapproved = days | rejectattr('status', 'equalto', 'approved') | list %}
+{% if unapproved %}
+<p class="flash" style="background:#d9534f22;color:#d9534f">
+  {{ unapproved | length }} day(s) not yet approved: {{ unapproved | map(attribute='day_name') | join(', ') }}.
+  All 7 days must be approved before publishing.
+</p>
+{% else %}
+<form class="formcard" method="post" enctype="multipart/form-data">
+  <label>Title (optional)</label>
+  <input type="text" name="title" placeholder="Leave blank for no title">
+
+  <label>PDF cover image (required)</label>
+  <input type="file" name="pdf_cover" accept="image/png,image/jpeg" required>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Used as the PDF's first page as-is (title text already baked into the image).
+  </p>
+
+  <label>Publish at (WIB) — leave blank to publish now</label>
+  <input type="datetime-local" name="publish_at">
+
+  <div class="actions"><button class="btn primary" type="submit">Publish</button></div>
+</form>
+{% endif %}
+{% endblock %}

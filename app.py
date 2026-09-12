@@ -2,7 +2,7 @@ import os
 import io
 import re
 import hmac
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from zoneinfo import ZoneInfo
 
@@ -13,12 +13,16 @@ from flask import (
     session, send_file, send_from_directory, abort, flash,
 )
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from parser import parse_txt_file, parse_docx_paragraphs as parse_ay_docx_paragraphs
 from parser_umum import parse_docx_file
 from pdf import generate_pdf_from_data
 from pdf_umum import generate_pdf_from_data_umum
-from content import make_slug, make_slug_umum, extract_title, parse_id_date
+from content import (
+    make_slug, make_slug_umum, extract_title, parse_id_date,
+    DAY_NAMES_ID, format_id_date, format_period, ID_MONTHS_NAME,
+)
 from docx_utils import extract_docx_paragraphs
 import db
 
@@ -55,6 +59,33 @@ def require_admin(view):
             return redirect(url_for("admin_login", next=request.path))
         return view(*args, **kwargs)
     return wrapper
+
+
+def require_contributor(view):
+    """Any signed-in contributor (writer or lead)."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not session.get("contrib_id"):
+            return redirect(url_for("contrib_login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def require_lead(view):
+    """Lead contributor, or the super-admin (who can always step in)."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if session.get("admin"):
+            return view(*args, **kwargs)
+        if not session.get("contrib_id") or session.get("contrib_role") != "lead":
+            return redirect(url_for("contrib_login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def current_contributor():
+    cid = session.get("contrib_id")
+    return db.get_contributor(cid) if cid else None
 
 
 def to_local(iso_utc):
@@ -607,6 +638,236 @@ def admin_umum_download(slug):
         dev["pdf_path"], mimetype="application/pdf", as_attachment=True,
         download_name=f"{dev['title']} - Umum - {dev['period']}.pdf",
     )
+
+
+# ------------------------------------------------ contributors (writers/leads)
+@app.route("/admin/contributors")
+@require_admin
+def admin_contributors():
+    return render_template("admin_contributors.html", contributors=db.list_contributors())
+
+
+@app.route("/admin/contributors/add", methods=["POST"])
+@require_admin
+def admin_contributors_add():
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
+    role = request.form.get("role", "").strip()
+    password = request.form.get("password", "")
+    if not name or not email or role not in ("writer", "lead") or len(password) < 6:
+        flash("Fill in a name, valid email, role, and a password of at least 6 characters.")
+        return redirect(url_for("admin_contributors"))
+    if db.get_contributor_by_email(email):
+        flash(f"{email} is already a contributor.")
+        return redirect(url_for("admin_contributors"))
+    db.create_contributor(name, email, generate_password_hash(password), role)
+    flash(f"Added {name} as a {role}.")
+    return redirect(url_for("admin_contributors"))
+
+
+@app.route("/admin/contributors/<int:contributor_id>/delete", methods=["POST"])
+@require_admin
+def admin_contributors_delete(contributor_id):
+    db.delete_contributor(contributor_id)
+    flash("Contributor removed.")
+    return redirect(url_for("admin_contributors"))
+
+
+@app.route("/contrib/login", methods=["GET", "POST"])
+def contrib_login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        contributor = db.get_contributor_by_email(email)
+        if contributor and check_password_hash(contributor["password_hash"], password):
+            session["contrib_id"] = contributor["id"]
+            session["contrib_role"] = contributor["role"]
+            return redirect(request.args.get("next") or url_for("contrib_dashboard"))
+        flash("Wrong email or password.")
+    return render_template("contrib_login.html")
+
+
+@app.route("/contrib/logout")
+def contrib_logout():
+    session.pop("contrib_id", None)
+    session.pop("contrib_role", None)
+    return redirect(url_for("contrib_login"))
+
+
+@app.route("/contrib")
+@require_contributor
+def contrib_dashboard():
+    me = current_contributor()
+    if session.get("contrib_role") == "lead":
+        weeks = db.list_weeks()
+        for w in weeks:
+            w["days"] = db.list_day_drafts(w["id"])
+        return render_template(
+            "contrib_lead.html", me=me, weeks=weeks,
+            writers=[c for c in db.list_contributors() if c["role"] == "writer"],
+        )
+    days = db.list_assigned_drafts(me["id"])
+    return render_template("contrib_writer.html", me=me, days=days)
+
+
+@app.route("/contrib/weeks/new", methods=["POST"])
+@require_lead
+def contrib_week_new():
+    start_str = request.form.get("start_date", "").strip()
+    try:
+        start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Pick a valid start date.")
+        return redirect(url_for("contrib_dashboard"))
+    day_specs = [
+        (name, format_id_date(start_date + timedelta(days=i), name))
+        for i, name in enumerate(DAY_NAMES_ID)
+    ]
+    week_id = db.create_week(start_date, day_specs)
+    flash("New week created — assign writers to each day.")
+    return redirect(url_for("contrib_week", week_id=week_id))
+
+
+@app.route("/contrib/weeks/<int:week_id>")
+@require_lead
+def contrib_week(week_id):
+    week = db.get_week(week_id)
+    if not week:
+        abort(404)
+    days = db.list_day_drafts(week_id)
+    writers = [c for c in db.list_contributors() if c["role"] == "writer"]
+    contributors_by_id = {c["id"]: c for c in db.list_contributors()}
+    return render_template(
+        "contrib_week.html", week=week, days=days, writers=writers,
+        contributors_by_id=contributors_by_id,
+    )
+
+
+@app.route("/contrib/day/<int:draft_id>/assign", methods=["POST"])
+@require_lead
+def contrib_day_assign(draft_id):
+    draft = db.get_day_draft(draft_id)
+    if not draft:
+        abort(404)
+    writer_id = request.form.get("writer_id", "").strip()
+    db.assign_draft(draft_id, int(writer_id) if writer_id else None)
+    return redirect(url_for("contrib_week", week_id=draft["week_id"]))
+
+
+@app.route("/contrib/day/<int:draft_id>", methods=["GET", "POST"])
+@require_contributor
+def contrib_day(draft_id):
+    draft = db.get_day_draft(draft_id)
+    if not draft:
+        abort(404)
+    me = current_contributor()
+    is_lead = session.get("contrib_role") == "lead" or session.get("admin")
+    is_owner = draft["assigned_to"] == (me["id"] if me else None)
+    if not is_lead and not is_owner:
+        abort(403)
+
+    writer_can_edit = is_owner and draft["status"] in ("draft", "changes_requested")
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action in ("save", "submit") and (writer_can_edit or is_lead):
+            questions = [q.strip() for q in request.form.get("questions", "").splitlines() if q.strip()]
+            new_status = "submitted" if action == "submit" else draft["status"]
+            if new_status == "unassigned":
+                new_status = "draft"
+            db.save_draft_content(
+                draft_id,
+                theme=request.form.get("theme", "").strip(),
+                verse=request.form.get("verse", "").strip(),
+                context=request.form.get("context", "").strip(),
+                firman_kristus=request.form.get("firman_kristus", "").strip(),
+                questions=questions,
+                status=new_status,
+            )
+            flash("Submitted for review." if action == "submit" else "Draft saved.")
+
+        elif action == "approve" and is_lead:
+            db.review_draft(draft_id, "approved", "")
+            flash(f"Approved {draft['day_name']}.")
+
+        elif action == "request_changes" and is_lead:
+            notes = request.form.get("review_notes", "").strip()
+            db.review_draft(draft_id, "changes_requested", notes)
+            flash(f"Sent {draft['day_name']} back for changes.")
+
+        else:
+            abort(403)
+
+        return redirect(url_for("contrib_day", draft_id=draft_id))
+
+    return render_template(
+        "contrib_day.html", draft=draft, is_lead=is_lead,
+        writer_can_edit=is_lead or writer_can_edit,
+    )
+
+
+@app.route("/contrib/weeks/<int:week_id>/publish", methods=["GET", "POST"])
+@require_lead
+def contrib_week_publish(week_id):
+    week = db.get_week(week_id)
+    if not week:
+        abort(404)
+    days = db.list_day_drafts(week_id)
+
+    if request.method == "POST":
+        if any(d["status"] != "approved" for d in days):
+            flash("Every day must be approved before publishing.")
+            return redirect(url_for("contrib_week", week_id=week_id))
+
+        pdf_cover = request.files.get("pdf_cover")
+        if not pdf_cover or not pdf_cover.filename:
+            flash("A PDF cover image is required to publish.")
+            return redirect(url_for("contrib_week_publish", week_id=week_id))
+
+        start_date = date.fromisoformat(week["start_date"])
+        end_date = start_date + timedelta(days=len(days) - 1)
+        parsed = {
+            "title": request.form.get("title", "").strip(),
+            "week": "",
+            "month": f"{ID_MONTHS_NAME[start_date.month]} {start_date.year}",
+            "period": format_period(start_date, end_date),
+            "days": [
+                {
+                    "date": d["date_str"], "theme": d["theme"], "verse": d["verse"],
+                    "context": d["context"], "firman_kristus": d["firman_kristus"],
+                    "questions": d["questions"],
+                }
+                for d in days
+            ],
+            "start_date": week["start_date"],
+        }
+
+        slug = week["published_slug"] or make_slug_umum(start_date)
+        image_path = os.path.join(db.UPLOAD_DIR, f"{slug}_cover_" + secure_filename(pdf_cover.filename))
+        pdf_cover.save(image_path)
+
+        pdf_buffer, _ = generate_pdf_from_data_umum(parsed, image_path)
+        pdf_path = os.path.join(db.PDF_DIR, f"{slug}.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_buffer.getvalue())
+
+        publish_local = request.form.get("publish_at", "").strip()
+        if publish_local:
+            publish_at = datetime.fromisoformat(publish_local).replace(tzinfo=LOCAL_TZ)
+        else:
+            publish_at = datetime.now(timezone.utc)
+
+        db.upsert_devotion(
+            slug=slug, title=parsed["title"], week=parsed["week"], month=parsed["month"],
+            period=parsed["period"], publish_at_utc=publish_at, parsed=parsed,
+            pdf_path=pdf_path, image_path=image_path, hero_path=None, division="umum",
+        )
+        db.mark_week_published(week_id, slug)
+        flash(f"Published “{parsed['title'] or slug}”.")
+        return redirect(url_for("contrib_dashboard"))
+
+    return render_template("contrib_publish.html", week=week, days=days)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+{% extends "base_umum.html" %}
+{% block title %}Writer/lead login{% endblock %}
+{% block content %}
+<div class="formcard">
+  <h2 style="margin-top:0">Contributor login</h2>
+  <form method="post">
+    <label>Email</label>
+    <input type="email" name="email" autofocus required>
+    <label>Password</label>
+    <input type="password" name="password" required>
+    <div class="actions"><button class="btn primary" type="submit">Log in</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base_umum.html" %}
+{% block title %}{{ draft.day_name }} — {{ draft.date_str }}{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">{{ draft.day_name }}</h2>
+  <span class="statuspill {{ draft.status }}">{{ draft.status.replace('_', ' ') }}</span>
+</div>
+<p class="sub" style="color:var(--muted)">{{ draft.date_str }}</p>
+
+{% if draft.review_notes and draft.status == "changes_requested" %}
+<div class="reviewnote"><strong>Changes requested:</strong> {{ draft.review_notes }}</div>
+{% endif %}
+
+{% if writer_can_edit %}
+<form class="formcard" method="post">
+  <label>Theme</label>
+  <input type="text" name="theme" value="{{ draft.theme }}" required>
+  <label>Bible reference</label>
+  <input type="text" name="verse" value="{{ draft.verse }}" required>
+  <label>Konteks</label>
+  <textarea name="context" rows="6">{{ draft.context }}</textarea>
+  <label>Firman Kristus</label>
+  <textarea name="firman_kristus" rows="6">{{ draft.firman_kristus }}</textarea>
+  <label>Pertanyaan (one question per line)</label>
+  <textarea name="questions" rows="4">{{ draft.questions | join('\n') }}</textarea>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Use &lt;b&gt;bold&lt;/b&gt; / &lt;i&gt;italic&lt;/i&gt; for inline formatting in Konteks/Firman Kristus.
+  </p>
+  <div class="actions">
+    <button class="btn" type="submit" name="action" value="save">Save draft</button>
+    <button class="btn primary" type="submit" name="action" value="submit">Submit for review</button>
+  </div>
+</form>
+{% else %}
+<div class="preview">
+  <h3 style="margin-top:0">{{ draft.theme }}</h3>
+  <p><em>{{ draft.verse }}</em></p>
+  {% if draft.context %}<h4>Konteks</h4>{% for para in draft.context.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}{% endif %}
+  {% if draft.firman_kristus %}<h4>Firman Kristus</h4>{% for para in draft.firman_kristus.split('\n') if para.strip() %}<p>{{ para | markup }}</p>{% endfor %}{% endif %}
+  {% if draft.questions %}<h4>Pertanyaan</h4><ol>{% for q in draft.questions %}<li>{{ q | markup }}</li>{% endfor %}</ol>{% endif %}
+</div>
+<p class="sub" style="color:var(--muted)">
+  {% if draft.status == "submitted" %}Waiting for a lead to review.{% else %}Approved — locked from further edits.{% endif %}
+</p>
+{% endif %}
+
+{% if is_lead %}
+<div class="formcard">
+  <h3 style="margin-top:0">Review</h3>
+  <form method="post" style="display:inline">
+    <button class="btn primary" type="submit" name="action" value="approve">Approve</button>
+  </form>
+  <form method="post" style="margin-top:12px">
+    <label>Feedback for the writer (required to request changes)</label>
+    <textarea name="review_notes" rows="3"></textarea>
+    <div class="actions">
+      <button class="btn" type="submit" name="action" value="request_changes">Request changes</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

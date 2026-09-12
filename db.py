@@ -58,6 +58,54 @@ def init_db():
         if "division" not in cols:
             conn.execute("ALTER TABLE devotions ADD COLUMN division TEXT NOT NULL DEFAULT 'ay'")
 
+        # --- Collaborative writing (writers draft days; leads review/approve) ---
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contributors (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT NOT NULL,
+                email         TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role          TEXT NOT NULL,   -- 'writer' or 'lead'
+                division      TEXT NOT NULL DEFAULT 'umum',
+                created_at    TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS umum_weeks (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                start_date     TEXT UNIQUE NOT NULL,   -- ISO date of the first day
+                created_at     TEXT NOT NULL,
+                published_slug TEXT                     -- set once this week is published
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS day_drafts (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                week_id        INTEGER NOT NULL REFERENCES umum_weeks(id),
+                day_index      INTEGER NOT NULL,
+                day_name       TEXT NOT NULL,
+                date_str       TEXT NOT NULL,
+                assigned_to    INTEGER REFERENCES contributors(id),
+                status         TEXT NOT NULL DEFAULT 'unassigned',
+                -- unassigned -> draft -> submitted -> approved
+                --                              (or) changes_requested -> draft
+                theme          TEXT NOT NULL DEFAULT '',
+                verse          TEXT NOT NULL DEFAULT '',
+                context        TEXT NOT NULL DEFAULT '',
+                firman_kristus TEXT NOT NULL DEFAULT '',
+                questions_json TEXT NOT NULL DEFAULT '[]',
+                review_notes   TEXT NOT NULL DEFAULT '',
+                updated_at     TEXT NOT NULL,
+                UNIQUE(week_id, day_index)
+            )
+            """
+        )
+
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -166,6 +214,161 @@ def delete_by_slug(slug):
                     os.remove(p)
                 except OSError:
                     pass
+
+
+# ------------------------------------------------------ contributors (writers/leads)
+def create_contributor(name, email, password_hash, role, division="umum"):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO contributors (name, email, password_hash, role, division, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (name, email.strip().lower(), password_hash, role, division, _now_iso()),
+        )
+
+
+def get_contributor_by_email(email):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM contributors WHERE email = ?", (email.strip().lower(),)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_contributor(contributor_id):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM contributors WHERE id = ?", (contributor_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_contributors(division="umum"):
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM contributors WHERE division = ? ORDER BY role, name",
+            (division,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_contributor(contributor_id):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE day_drafts SET assigned_to = NULL WHERE assigned_to = ?",
+            (contributor_id,),
+        )
+        conn.execute("DELETE FROM contributors WHERE id = ?", (contributor_id,))
+
+
+# ------------------------------------------------------ umum weeks & day drafts
+def create_week(start_date, day_specs):
+    """day_specs: list of (day_name, date_str) in order. Creates the week and
+    one unassigned day_draft per entry. Returns the new week's id."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO umum_weeks (start_date, created_at) VALUES (?, ?)",
+            (start_date.isoformat(), _now_iso()),
+        )
+        week_id = cur.lastrowid
+        for i, (day_name, date_str) in enumerate(day_specs):
+            conn.execute(
+                "INSERT INTO day_drafts (week_id, day_index, day_name, date_str, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (week_id, i, day_name, date_str, _now_iso()),
+            )
+    return week_id
+
+
+def list_weeks():
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM umum_weeks ORDER BY start_date DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_week(week_id):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM umum_weeks WHERE id = ?", (week_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def mark_week_published(week_id, slug):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE umum_weeks SET published_slug = ? WHERE id = ?", (slug, week_id)
+        )
+
+
+def list_day_drafts(week_id):
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM day_drafts WHERE week_id = ? ORDER BY day_index", (week_id,)
+        ).fetchall()
+    days = [dict(r) for r in rows]
+    for d in days:
+        d["questions"] = json.loads(d.pop("questions_json"))
+    return days
+
+
+def get_day_draft(draft_id):
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM day_drafts WHERE id = ?", (draft_id,)).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["questions"] = json.loads(d.pop("questions_json"))
+    return d
+
+
+def list_assigned_drafts(contributor_id):
+    """Every day_draft assigned to this writer, most recent week first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT day_drafts.*, umum_weeks.start_date AS week_start
+            FROM day_drafts JOIN umum_weeks ON umum_weeks.id = day_drafts.week_id
+            WHERE assigned_to = ?
+            ORDER BY umum_weeks.start_date DESC, day_index
+            """,
+            (contributor_id,),
+        ).fetchall()
+    days = [dict(r) for r in rows]
+    for d in days:
+        d["questions"] = json.loads(d.pop("questions_json"))
+    return days
+
+
+def assign_draft(draft_id, contributor_id):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE day_drafts SET assigned_to = ?, status = "
+            "CASE WHEN status = 'unassigned' THEN 'draft' ELSE status END WHERE id = ?",
+            (contributor_id or None, draft_id),
+        )
+
+
+def save_draft_content(draft_id, theme, verse, context, firman_kristus, questions, status):
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE day_drafts SET theme=?, verse=?, context=?, firman_kristus=?,
+                questions_json=?, status=?, updated_at=?
+            WHERE id = ?
+            """,
+            (theme, verse, context, firman_kristus, json.dumps(questions, ensure_ascii=False),
+             status, _now_iso(), draft_id),
+        )
+
+
+def review_draft(draft_id, status, review_notes=""):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE day_drafts SET status = ?, review_notes = ?, updated_at = ? WHERE id = ?",
+            (status, review_notes, _now_iso(), draft_id),
+        )
 
 
 init_db()

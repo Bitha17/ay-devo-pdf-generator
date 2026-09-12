@@ -1,0 +1,50 @@
+{% extends "base_umum.html" %}
+{% block title %}Admin · Contributors{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Writers &amp; leads (Umum)</h2>
+  <a class="iconbtn" href="{{ url_for('admin_umum') }}">Umum admin</a>
+  <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
+</div>
+
+<p class="sub" style="color:var(--muted);font-size:13px">
+  Writers draft one day each; leads review, request changes, approve, and
+  publish. Give each person their own login at
+  <code>{{ url_for('contrib_login', _external=True) }}</code>.
+</p>
+
+<form class="formcard" method="post" action="{{ url_for('admin_contributors_add') }}">
+  <label>Name</label>
+  <input type="text" name="name" required>
+  <label>Email</label>
+  <input type="email" name="email" required>
+  <label>Role</label>
+  <select name="role">
+    <option value="writer">Writer</option>
+    <option value="lead">Lead</option>
+  </select>
+  <label>Password (min 6 characters)</label>
+  <input type="password" name="password" minlength="6" required>
+  <div class="actions"><button class="btn primary" type="submit">Add contributor</button></div>
+</form>
+
+<h3 style="margin-top:28px">All contributors</h3>
+{% if not contributors %}
+  <p style="color:var(--muted)">None yet.</p>
+{% else %}
+<ul class="list">
+  {% for c in contributors %}
+  <li>
+    <div style="flex:1">
+      <span class="title">{{ c.name }}</span>
+      <div class="sub">{{ c.email }} · {{ c.role }}</div>
+    </div>
+    <form method="post" action="{{ url_for('admin_contributors_delete', contributor_id=c.id) }}"
+          onsubmit="return confirm('Remove {{ c.name }}? Their assigned days will be unassigned.')">
+      <button class="danger" type="submit">Remove</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

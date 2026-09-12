@@ -1,0 +1,43 @@
+{% extends "base_umum.html" %}
+{% block title %}Lead dashboard{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Hi, {{ me.name }}</h2>
+  <a class="iconbtn" href="{{ url_for('contrib_logout') }}">Log out</a>
+</div>
+
+<form class="formcard" method="post" action="{{ url_for('contrib_week_new') }}">
+  <label>New week's start date (Monday)</label>
+  <input type="date" name="start_date" required>
+  <p class="sub" style="color:var(--muted);font-size:12px;margin:4px 0 0">
+    Creates 7 unassigned days (Senin–Minggu) ready for writer assignment.
+  </p>
+  <div class="actions"><button class="btn primary" type="submit">Create week</button></div>
+</form>
+
+{% if not writers %}
+  <p style="color:var(--muted);margin-top:16px">No writers yet — add some in
+  <a href="{{ url_for('admin_contributors') }}">Admin → Contributors</a>.</p>
+{% endif %}
+
+<h3 style="margin-top:28px">Weeks</h3>
+{% if not weeks %}
+  <p style="color:var(--muted)">No weeks yet.</p>
+{% else %}
+<ul class="list">
+  {% for w in weeks %}
+  <li>
+    <div style="flex:1">
+      <a class="title" href="{{ url_for('contrib_week', week_id=w.id) }}">Week of {{ w.start_date }}</a>
+      <div class="sub">
+        {{ w.days | selectattr('status', 'equalto', 'approved') | list | length }}/{{ w.days | length }} approved
+      </div>
+    </div>
+    {% if w.published_slug %}
+      <span class="badge live">PUBLISHED</span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

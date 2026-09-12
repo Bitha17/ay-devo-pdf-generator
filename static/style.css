@@ -588,3 +588,44 @@ details.guide ul { margin: 4px 0; padding-left: 1.2em; }
   font-size: 14px;
 }
 .danger { color: #d9534f; background: none; border: none; cursor: pointer; font-size: 13px; }
+
+/* ---- Contributor (writer/lead) UI ---- */
+input[type="date"], input[type="email"], textarea, select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+textarea { resize: vertical; min-height: 90px; }
+.statuspill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.statuspill.unassigned { background: #8888882e; color: var(--muted); }
+.statuspill.draft { background: #d9822b22; color: #d9822b; }
+.statuspill.submitted { background: #2b7dd922; color: #2b7dd9; }
+.statuspill.changes_requested { background: #d9534f22; color: #d9534f; }
+.statuspill.approved { background: #1f9d5522; color: #1f9d55; }
+.reviewnote {
+  background: #d9534f14;
+  border: 1px solid #d9534f44;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+.preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 16px;
+}
