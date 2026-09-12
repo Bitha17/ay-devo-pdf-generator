@@ -55,6 +55,12 @@ LOCAL_TZ = ZoneInfo(os.environ.get("DEVO_TZ", "Asia/Jakarta"))
 FIXED_BG = "static/bg.png"            # bundled default later-pages background
 ACTIVE_BG = os.path.join(db.DATA_DIR, "bg.png")  # admin-uploaded override (persisted)
 UPLOAD_EXTENSIONS = {"document": {".txt", ".docx"}, "docx": {".docx"}, "image": {".png", ".jpg", ".jpeg"}}
+# PythonAnywhere keeps this log for a limited time.  The analytics importer
+# copies its privacy-preserving fields into SQLite before rotation.
+ACCESS_LOG_PATH = os.environ.get(
+    "DEVO_ACCESS_LOG", "/var/log/tabithapermalla.pythonanywhere.com.access.log"
+)
+ANALYTICS_SALT = os.environ.get("DEVO_ANALYTICS_SALT", SECRET_KEY)
 
 
 # ---------------------------------------------------------------- helpers
@@ -838,6 +844,39 @@ def admin_contributors():
     return render_template(
         "admin_contributors.html", contributors=db.list_contributors(division), division=division,
     )
+
+
+@app.route("/admin/analytics")
+@require_admin
+def admin_analytics():
+    try:
+        days = int(request.args.get("days", "30"))
+    except ValueError:
+        days = 30
+    days = max(1, min(days, 365))
+    analytics = db.access_analytics(days)
+    # Charts run from oldest to newest, even though SQL returns the latest day first.
+    analytics["daily"].reverse()
+    peak = max((row["requests"] for row in analytics["daily"]), default=1)
+    for row in analytics["daily"]:
+        row["bar_width"] = max(3, round(row["requests"] * 100 / peak))
+    return render_template(
+        "admin_analytics.html", analytics=analytics, days=days,
+        log_path=ACCESS_LOG_PATH, log_available=os.path.isfile(ACCESS_LOG_PATH),
+    )
+
+
+@app.route("/admin/analytics/import", methods=["POST"])
+@require_admin
+def admin_analytics_import():
+    try:
+        result = db.import_access_log(ACCESS_LOG_PATH, ANALYTICS_SALT)
+    except OSError:
+        flash("The configured access log could not be read. Check DEVO_ACCESS_LOG on the server.")
+    else:
+        detail = f" {result['skipped']} incomplete line(s) were skipped." if result["skipped"] else ""
+        flash(f"Imported {result['imported']} new request(s).{detail}")
+    return redirect(url_for("admin_analytics", days=request.form.get("days", "30")))
 
 
 @app.route("/admin/contributors/add", methods=["POST"])

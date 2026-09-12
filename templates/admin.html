@@ -5,6 +5,7 @@
   <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1">Publish a devotion</h2>
   {% if is_super_admin %}
     <a class="iconbtn" href="{{ url_for('admin_contributors', division='ay') }}">Contributors</a>
+    <a class="iconbtn" href="{{ url_for('admin_analytics') }}">Analytics</a>
     <a class="iconbtn" href="{{ url_for('admin_umum') }}">Umum admin</a>
     <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
   {% else %}

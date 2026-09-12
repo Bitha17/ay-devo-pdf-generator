@@ -104,6 +104,32 @@ body {
   padding: 16px;
 }
 
+/* ---- Super-admin analytics ---- */
+.analytics-note { margin: 12px 0 16px; }
+.analytics-controls { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.analytics-controls .viewtoggle { margin:0; }
+.analytics-cards { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin:18px 0; }
+.analytics-card, .analytics-section, .empty-state { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
+.analytics-card span, .analytics-card small { display:block; color:var(--muted); font-size:12px; }
+.analytics-card strong { display:block; font-size:24px; margin:3px 0; color:var(--accent); }
+.analytics-section { margin-top:16px; overflow-x:auto; }
+.analytics-section h3 { margin:0 0 12px; font-size:16px; }
+.analytics-grid { display:grid; grid-template-columns:1fr; gap:16px; }
+.daily-bars { display:grid; gap:8px; min-width:440px; }
+.daily-row { display:grid; grid-template-columns:92px minmax(80px, 1fr) 36px 130px; gap:8px; align-items:center; font-size:12px; }
+.daily-row > span, .daily-row small { color:var(--muted); }
+.daily-row b { text-align:right; }
+.bar-track { height:10px; background:var(--bg); border-radius:99px; overflow:hidden; }
+.bar-track i { display:block; height:100%; background:var(--accent-soft); border-radius:99px; }
+.analytics-table { width:100%; border-collapse:collapse; font-size:13px; }
+.analytics-table th { color:var(--muted); font-weight:600; text-align:left; }
+.analytics-table th, .analytics-table td { padding:8px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
+.analytics-table td:nth-last-child(-n+2), .analytics-table th:nth-last-child(-n+2) { text-align:right; }
+.analytics-table code { overflow-wrap:anywhere; }
+.status { font-size:12px; font-weight:700; }
+.status-2, .status-3 { color:#28784a; }.status-4 { color:#b57216; }.status-5 { color:#b64141; }
+@media (min-width: 760px) { .analytics-grid { grid-template-columns:1fr 1fr; } .analytics-cards { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+
 /* ---- Hero ---- */
 .hero {
   background: var(--accent);

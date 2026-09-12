@@ -1,0 +1,85 @@
+{% extends "base_umum.html" %}
+{% block title %}Analytics · Devotions{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <h2 style="font-family:'Poynter',serif;font-weight:400;flex:1;margin:0">Site analytics</h2>
+  <a class="iconbtn" href="{{ url_for('admin') }}">AY admin</a>
+  <a class="iconbtn" href="{{ url_for('admin_umum') }}">Umum admin</a>
+  <a class="iconbtn" href="{{ url_for('admin_logout') }}">Log out</a>
+</div>
+
+<p class="sub analytics-note">Request activity from the PythonAnywhere access log. IP addresses, search strings, referrers, and browser details are never stored.</p>
+
+<div class="analytics-controls">
+  <div class="viewtoggle">
+    {% for option in (7, 30, 90) %}
+      <a href="{{ url_for('admin_analytics', days=option) }}" class="{% if days == option %}active{% endif %}">{{ option }} days</a>
+    {% endfor %}
+  </div>
+  <form method="post" action="{{ url_for('admin_analytics_import') }}">
+    <input type="hidden" name="days" value="{{ days }}">
+    <button class="btn primary" type="submit" {% if not log_available %}disabled title="The configured log file is unavailable"{% endif %}>Import latest log</button>
+  </form>
+</div>
+{% if not log_available %}
+  <p class="flash">The live log is unavailable at <code>{{ log_path }}</code>. Set <code>DEVO_ACCESS_LOG</code> in the WSGI configuration.</p>
+{% endif %}
+
+<section class="analytics-cards">
+  <div class="analytics-card"><span>App requests</span><strong>{{ analytics.summary.requests or 0 }}</strong><small>excludes static files</small></div>
+  <div class="analytics-card"><span>Unique visitors</span><strong>{{ analytics.summary.visitors or 0 }}</strong><small>privacy-preserving estimate</small></div>
+  <div class="analytics-card"><span>Errors</span><strong>{{ analytics.summary.errors or 0 }}</strong><small>responses with 4xx or 5xx</small></div>
+  <div class="analytics-card"><span>Average response</span><strong>{{ "%.0f"|format(analytics.summary.average_ms or 0) }} ms</strong><small>includes queue time</small></div>
+</section>
+
+{% if analytics.bounds.stored %}
+  <p class="sub analytics-note">Stored activity: {{ to_local(analytics.bounds.first_event).strftime('%d %b %Y') }}–{{ to_local(analytics.bounds.last_event).strftime('%d %b %Y, %H:%M') }} WIB · {{ analytics.bounds.stored }} request records.</p>
+{% else %}
+  <div class="empty-state"><strong>No activity has been imported yet.</strong><br>Use “Import latest log” now, then schedule the importer to preserve activity after the PythonAnywhere log rotates.</div>
+{% endif %}
+
+{% if analytics.daily %}
+<section class="analytics-section">
+  <h3>Daily activity</h3>
+  <div class="daily-bars">
+    {% for day in analytics.daily %}
+    <div class="daily-row">
+      <span>{{ day.day }}</span>
+      <div class="bar-track"><i style="width:{{ day.bar_width }}%"></i></div>
+      <b>{{ day.requests }}</b><small>{{ day.visitors }} visitors{% if day.errors %} · {{ day.errors }} errors{% endif %}</small>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<div class="analytics-grid">
+  <section class="analytics-section">
+    <h3>Most-used routes</h3>
+    {% if analytics.top_pages %}<table class="analytics-table"><thead><tr><th>Route</th><th>Requests</th><th>Visitors</th></tr></thead><tbody>
+    {% for row in analytics.top_pages %}<tr><td><code>{{ row.path }}</code></td><td>{{ row.requests }}</td><td>{{ row.visitors }}</td></tr>{% endfor %}
+    </tbody></table>{% else %}<p class="sub">No app requests in this period.</p>{% endif %}
+  </section>
+  <section class="analytics-section">
+    <h3>Slowest routes</h3>
+    {% if analytics.slow_pages %}<table class="analytics-table"><thead><tr><th>Route</th><th>Average</th><th>Maximum</th></tr></thead><tbody>
+    {% for row in analytics.slow_pages %}<tr><td><code>{{ row.path }}</code></td><td>{{ row.average_ms }} ms</td><td>{{ row.max_ms }} ms</td></tr>{% endfor %}
+    </tbody></table>{% else %}<p class="sub">Two or more requests to a route are needed.</p>{% endif %}
+  </section>
+</div>
+
+<div class="analytics-grid">
+  <section class="analytics-section">
+    <h3>Error routes</h3>
+    {% if analytics.errors %}<table class="analytics-table"><thead><tr><th>Status</th><th>Route</th><th>Count</th></tr></thead><tbody>
+    {% for row in analytics.errors %}<tr><td><span class="status status-{{ row.status // 100 }}">{{ row.status }}</span></td><td><code>{{ row.path }}</code></td><td>{{ row.requests }}</td></tr>{% endfor %}
+    </tbody></table>{% else %}<p class="sub">No errors in this period.</p>{% endif %}
+  </section>
+  <section class="analytics-section">
+    <h3>Recent app requests</h3>
+    {% if analytics.recent %}<table class="analytics-table"><thead><tr><th>Time</th><th>Request</th><th>Status</th></tr></thead><tbody>
+    {% for row in analytics.recent %}<tr><td>{{ to_local(row.occurred_at).strftime('%d %b %H:%M') }}</td><td><code>{{ row.method }} {{ row.path }}</code></td><td><span class="status status-{{ row.status // 100 }}">{{ row.status }}</span> <small>{{ row.response_ms }} ms</small></td></tr>{% endfor %}
+    </tbody></table>{% else %}<p class="sub">No requests in this period.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

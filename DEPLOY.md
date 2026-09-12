@@ -38,6 +38,11 @@ Set that link once in Linktree / the mobile app and never change it again.
    os.environ["SECRET_KEY"]     = "some-long-random-string"
    os.environ["DEVO_TZ"]        = "Asia/Jakarta"
 
+   # Optional, but recommended when analytics imports run as a scheduled task.
+   # Use the same value in both the web app and importer.
+   with open("/home/<you>/.devo-analytics-salt") as f:
+       os.environ["DEVO_ANALYTICS_SALT"] = f.read().strip()
+
    from app import app as application
    ```
 
@@ -67,6 +72,30 @@ Set that link once in Linktree / the mobile app and never change it again.
   on the Web tab periodically, or the site goes offline.
 - **CPU seconds** are limited on free tier. PDF generation uses some CPU, but it only runs
   once per upload (not per reader), so this is fine.
+
+## Analytics and preserving access history
+
+The super-admin-only `/admin/analytics` page imports PythonAnywhere access-log
+entries into `data/devo.db`. It keeps the request time, route, HTTP status,
+response time and a salted anonymous visitor token. It deliberately does not
+store IP addresses, query strings, referrers, or browser strings.
+
+PythonAnywhere rotates its live access log, so create a salt file once and add
+a daily **Tasks** entry. Replace `<you>` and the virtualenv path as appropriate:
+
+```
+umask 077
+python3 -c "import secrets; print(secrets.token_hex(32))" > /home/<you>/.devo-analytics-salt
+```
+
+```
+/home/<you>/.virtualenvs/devo/bin/python /home/<you>/ay-devo-pdf-generator/analytics_import.py
+```
+
+The importer can run more than once a day; it ignores already stored lines.
+Use the dashboard's **Import latest log** button to verify the path first. The
+historical data in SQLite survives PythonAnywhere log rotation, but it cannot
+recover events that rotated away before the first import.
 
 ## Backups
 Everything is in `data/devo.db` + `data/uploads/` + `data/pdfs/`. Download `data/` from the

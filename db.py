@@ -10,7 +10,10 @@ their paths plus the parsed devotion JSON so we never re-parse at read time.
 import os
 import json
 import sqlite3
+import hashlib
+import re
 from datetime import datetime, timezone, date
+from urllib.parse import urlsplit
 
 from content import parse_id_date
 
@@ -151,6 +154,27 @@ def init_db():
             conn.execute("ALTER TABLE day_drafts ADD COLUMN feedback_draft TEXT NOT NULL DEFAULT ''")
         if "version" not in draft_cols:
             conn.execute("ALTER TABLE day_drafts ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+
+        # Access-log analytics deliberately retain no raw IP addresses or query
+        # strings.  The fingerprint makes repeated imports safe, while the
+        # salted visitor token allows approximate unique-visitor counts.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS access_events (
+                fingerprint   TEXT PRIMARY KEY,
+                occurred_at   TEXT NOT NULL,
+                method        TEXT NOT NULL,
+                path          TEXT NOT NULL,
+                status        INTEGER NOT NULL,
+                response_ms   REAL NOT NULL,
+                response_size INTEGER NOT NULL,
+                visitor_token TEXT NOT NULL,
+                is_asset      INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS access_events_time ON access_events(occurred_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS access_events_path ON access_events(path)")
 
 
 def _now_iso():
@@ -491,6 +515,147 @@ def publish_feedback(draft_id, feedback, status=None):
                 "UPDATE day_drafts SET review_notes = ?, feedback_draft = '', updated_at = ? WHERE id = ?",
                 (feedback, _now_iso(), draft_id),
             )
+
+
+# ------------------------------------------------------ access-log analytics
+_ACCESS_LOG_PATTERN = re.compile(
+    r'^(?P<ip>\S+) \S+ \S+ \[(?P<timestamp>[^\]]+)\] '
+    r'"(?P<method>\S+) (?P<target>\S+)(?: \S+)?" '
+    r'(?P<status>\d{3}) (?P<size>\S+) "[^"]*" "[^"]*" "(?P<forwarded>[^"]*)" '
+    r'response-time=(?P<duration>[\d.]+)\s*$'
+)
+
+
+def _access_event_from_line(line, visitor_salt):
+    """Parse one PythonAnywhere access-log line without retaining its IP or query.
+
+    ``visitor_salt`` must be private and stable (the application's SECRET_KEY is
+    suitable).  The resulting token cannot be used to recover the address.
+    """
+    match = _ACCESS_LOG_PATTERN.match(line)
+    if not match:
+        return None
+    try:
+        timestamp = datetime.strptime(match["timestamp"], "%d/%b/%Y:%H:%M:%S %z")
+        path = urlsplit(match["target"]).path or "/"
+        forwarded = match["forwarded"].split(",")[0].strip()
+        visitor = forwarded or match["ip"]
+        return {
+            "occurred_at": timestamp.astimezone(timezone.utc).isoformat(),
+            "method": match["method"],
+            "path": path[:500],
+            "status": int(match["status"]),
+            "response_ms": round(float(match["duration"]) * 1000, 1),
+            "response_size": 0 if match["size"] == "-" else int(match["size"]),
+            "visitor_token": hashlib.sha256(
+                f"{visitor_salt}:{visitor}".encode("utf-8")
+            ).hexdigest()[:16],
+            "is_asset": int(path.startswith(("/static/", "/assets/", "/favicon"))),
+        }
+    except (OverflowError, ValueError):
+        return None
+
+
+def import_access_log(path, visitor_salt):
+    """Import a PythonAnywhere access log and return import counts.
+
+    The file may be imported repeatedly; its per-line fingerprint makes the
+    operation idempotent.  Invalid or incomplete lines are skipped so a log
+    being written while it is read does not break the dashboard.
+    """
+    imported = skipped = 0
+    # A busy browser can make two asset requests with exactly the same log
+    # line (including its second-level timestamp). Count repeats in this input
+    # so each one is kept; the same ordered log then still imports idempotently.
+    occurrences = {}
+    with open(path, "r", encoding="utf-8", errors="replace") as log_file, _connect() as conn:
+        for line in log_file:
+            raw_line = line.rstrip("\n")
+            event = _access_event_from_line(raw_line, visitor_salt)
+            if not event:
+                skipped += 1
+                continue
+            raw_fingerprint = hashlib.sha256(
+                f"{visitor_salt}:{raw_line}".encode("utf-8")
+            ).hexdigest()
+            occurrences[raw_fingerprint] = occurrences.get(raw_fingerprint, 0) + 1
+            event["fingerprint"] = hashlib.sha256(
+                f"{raw_fingerprint}:{occurrences[raw_fingerprint]}".encode("utf-8")
+            ).hexdigest()
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO access_events
+                    (fingerprint, occurred_at, method, path, status, response_ms,
+                     response_size, visitor_token, is_asset)
+                VALUES (:fingerprint, :occurred_at, :method, :path, :status, :response_ms,
+                        :response_size, :visitor_token, :is_asset)
+                """,
+                event,
+            )
+            imported += cur.rowcount
+    return {"imported": imported, "skipped": skipped}
+
+
+def access_analytics(days=30):
+    """Return privacy-preserving aggregates for the super-admin dashboard."""
+    days = max(1, min(int(days), 365))
+    cutoff = datetime.now(timezone.utc).replace(microsecond=0).timestamp() - days * 86400
+    cutoff_iso = datetime.fromtimestamp(cutoff, timezone.utc).isoformat()
+    with _connect() as conn:
+        total = conn.execute(
+            """SELECT COUNT(*) AS requests, COUNT(DISTINCT visitor_token) AS visitors,
+                      SUM(CASE WHEN status >= 400 THEN 1 ELSE 0 END) AS errors,
+                      AVG(response_ms) AS average_ms
+               FROM access_events WHERE occurred_at >= ? AND is_asset = 0""",
+            (cutoff_iso,),
+        ).fetchone()
+        daily = conn.execute(
+            """SELECT substr(occurred_at, 1, 10) AS day, COUNT(*) AS requests,
+                      COUNT(DISTINCT visitor_token) AS visitors,
+                      SUM(CASE WHEN status >= 400 THEN 1 ELSE 0 END) AS errors
+               FROM access_events
+               WHERE occurred_at >= ? AND is_asset = 0
+               GROUP BY day ORDER BY day DESC""",
+            (cutoff_iso,),
+        ).fetchall()
+        top_pages = conn.execute(
+            """SELECT path, COUNT(*) AS requests, COUNT(DISTINCT visitor_token) AS visitors
+               FROM access_events
+               WHERE occurred_at >= ? AND is_asset = 0
+               GROUP BY path ORDER BY requests DESC, path LIMIT 10""",
+            (cutoff_iso,),
+        ).fetchall()
+        slow_pages = conn.execute(
+            """SELECT path, COUNT(*) AS requests, ROUND(AVG(response_ms), 1) AS average_ms,
+                      ROUND(MAX(response_ms), 1) AS max_ms
+               FROM access_events
+               WHERE occurred_at >= ? AND is_asset = 0
+               GROUP BY path HAVING requests >= 2
+               ORDER BY average_ms DESC, requests DESC LIMIT 10""",
+            (cutoff_iso,),
+        ).fetchall()
+        errors = conn.execute(
+            """SELECT status, path, COUNT(*) AS requests
+               FROM access_events
+               WHERE occurred_at >= ? AND status >= 400
+               GROUP BY status, path ORDER BY requests DESC, status DESC LIMIT 10""",
+            (cutoff_iso,),
+        ).fetchall()
+        recent = conn.execute(
+            """SELECT occurred_at, method, path, status, response_ms, visitor_token
+               FROM access_events WHERE occurred_at >= ? AND is_asset = 0
+               ORDER BY occurred_at DESC LIMIT 20""",
+            (cutoff_iso,),
+        ).fetchall()
+        bounds = conn.execute(
+            "SELECT MIN(occurred_at) AS first_event, MAX(occurred_at) AS last_event, COUNT(*) AS stored FROM access_events"
+        ).fetchone()
+    return {
+        "summary": dict(total), "daily": [dict(row) for row in daily],
+        "top_pages": [dict(row) for row in top_pages], "slow_pages": [dict(row) for row in slow_pages],
+        "errors": [dict(row) for row in errors], "recent": [dict(row) for row in recent],
+        "bounds": dict(bounds),
+    }
 
 
 init_db()

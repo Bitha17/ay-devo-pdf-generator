@@ -323,3 +323,12 @@ contributors, with no separate deployment for those routes.
   `review_notes` + `updated_at` are the only trace of prior review activity.
 - No dedup/guard against the two independent AY slug schemes colliding (see
   above).
+# Analytics
+
+- The super-admin-only `/admin/analytics` dashboard summarizes the imported
+  PythonAnywhere access log. It stores a privacy-preserving event record in
+  SQLite rather than raw log lines: no IP address, query string, referrer, or
+  user-agent is retained.
+- Run `analytics_import.py` from a daily PythonAnywhere scheduled task so the
+  event history survives log rotation. Importing is idempotent. Deployment
+  setup is documented in `DEPLOY.md`.
