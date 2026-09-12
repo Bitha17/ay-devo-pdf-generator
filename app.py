@@ -772,14 +772,31 @@ def contrib_day(draft_id):
         action = request.form.get("action")
 
         if action in ("save", "submit") and (writer_can_edit or is_lead):
-            questions = [q.strip() for q in request.form.get("questions", "").splitlines() if q.strip()]
+            verse = request.form.get("verse", "").strip()
+            texts = request.form.getlist("q_text")
+            verses = request.form.getlist("q_verse")
+            questions = []
+            for text, q_verse in zip(texts, verses):
+                text, q_verse = text.strip(), q_verse.strip()
+                if text or q_verse:
+                    questions.append({"text": text, "verse": q_verse})
+
+            if action == "submit":
+                missing = [q for q in questions if q["text"] and not q["verse"]]
+                if not verse:
+                    flash("Choose the day's reference verse before submitting.")
+                    return redirect(url_for("contrib_day", draft_id=draft_id))
+                if missing:
+                    flash("Choose a reference verse for every Pertanyaan before submitting.")
+                    return redirect(url_for("contrib_day", draft_id=draft_id))
+
             new_status = "submitted" if action == "submit" else draft["status"]
             if new_status == "unassigned":
                 new_status = "draft"
             db.save_draft_content(
                 draft_id,
                 theme=request.form.get("theme", "").strip(),
-                verse=request.form.get("verse", "").strip(),
+                verse=verse,
                 context=request.form.get("context", "").strip(),
                 firman_kristus=request.form.get("firman_kristus", "").strip(),
                 questions=questions,
@@ -836,7 +853,7 @@ def contrib_week_publish(week_id):
                 {
                     "date": d["date_str"], "theme": d["theme"], "verse": d["verse"],
                     "context": d["context"], "firman_kristus": d["firman_kristus"],
-                    "questions": d["questions"],
+                    "questions": [f"{q['text']} ({q['verse']})" if q["verse"] else q["text"] for q in d["questions"]],
                 }
                 for d in days
             ],

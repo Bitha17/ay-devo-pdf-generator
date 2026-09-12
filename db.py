@@ -302,6 +302,19 @@ def mark_week_published(week_id, slug):
         )
 
 
+def _normalize_questions(raw_list):
+    """Each question is {"text", "verse"} — a chosen reference is mandatory
+    going forward. Older rows saved before that requirement may still hold
+    plain strings; wrap those with an empty verse so old drafts still load."""
+    out = []
+    for q in raw_list:
+        if isinstance(q, dict):
+            out.append({"text": q.get("text", ""), "verse": q.get("verse", "")})
+        else:
+            out.append({"text": q, "verse": ""})
+    return out
+
+
 def list_day_drafts(week_id):
     with _connect() as conn:
         rows = conn.execute(
@@ -309,7 +322,7 @@ def list_day_drafts(week_id):
         ).fetchall()
     days = [dict(r) for r in rows]
     for d in days:
-        d["questions"] = json.loads(d.pop("questions_json"))
+        d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
     return days
 
 
@@ -319,7 +332,7 @@ def get_day_draft(draft_id):
     if not row:
         return None
     d = dict(row)
-    d["questions"] = json.loads(d.pop("questions_json"))
+    d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
     return d
 
 
@@ -337,7 +350,7 @@ def list_assigned_drafts(contributor_id):
         ).fetchall()
     days = [dict(r) for r in rows]
     for d in days:
-        d["questions"] = json.loads(d.pop("questions_json"))
+        d["questions"] = _normalize_questions(json.loads(d.pop("questions_json")))
     return days
 
 

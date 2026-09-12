@@ -629,3 +629,38 @@ textarea { resize: vertical; min-height: 90px; }
   padding: 20px;
   margin-top: 16px;
 }
+
+/* ---- Verse picker (contrib_day.html) ---- */
+.versepicker {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--bg);
+}
+.vp-row { display: flex; gap: 8px; }
+.vp-row select { width: auto; flex: 1; }
+.vp-verses {
+  margin-top: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.vp-verse-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.vp-verse-item input { width: auto; margin-top: 3px; }
+.vp-verse-item sup { color: var(--accent); font-weight: 700; margin-right: 2px; }
+.vp-current { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.qblock {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+}
+.qblock .remove-q { margin-top: 8px; }
