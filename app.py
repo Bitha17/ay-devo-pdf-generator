@@ -1050,7 +1050,14 @@ def contrib_day(draft_id):
             new_status = "submitted" if action == "submit" else draft["status"]
             if new_status == "unassigned":
                 new_status = "draft"
-            db.save_draft_content(
+            try:
+                expected_version = int(request.form.get("version", ""))
+            except ValueError:
+                if action == "autosave":
+                    return jsonify({"ok": False, "conflict": True}), 409
+                flash("This draft has changed elsewhere. Reload it before saving.")
+                return redirect(url_for("contrib_day", draft_id=draft_id))
+            saved = db.save_draft_content(
                 draft_id,
                 theme=request.form.get("theme", "").strip(),
                 verse=verse,
@@ -1063,7 +1070,13 @@ def contrib_day(draft_id):
                 m3=request.form.get("m3", "").strip() if division == "ay" else "",
                 m4=request.form.get("m4", "").strip() if division == "ay" else "",
                 aplikasi=aplikasi if division == "ay" else [],
+                expected_version=expected_version,
             )
+            if not saved:
+                if action == "autosave":
+                    return jsonify({"ok": False, "conflict": True}), 409
+                flash("This draft was updated in another tab or by a lead. Reload it before saving your changes.")
+                return redirect(url_for("contrib_day", draft_id=draft_id))
             if action == "lead_save":
                 db.update_feedback_draft(draft_id, request.form.get("feedback_draft", "").strip())
                 flash("Lead edits saved. Feedback remains private until you send it to the writer.")

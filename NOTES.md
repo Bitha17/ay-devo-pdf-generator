@@ -123,6 +123,9 @@ There are two ways to supply content:
   render cannot leave a half-written PDF at the reader-facing path.
 - The app supplies user-facing 403, 404, 413, and 500 pages. The 500 handler
   logs the underlying exception and intentionally does not expose it to users.
+- SQLite waits up to 10 seconds when another request holds the database lock.
+  Draft saves carry a version number: a stale tab cannot overwrite a newer
+  writer or lead edit. The writer is asked to reload instead.
 
 ## Code and storage map
 

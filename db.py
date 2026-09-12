@@ -25,7 +25,8 @@ for d in (DATA_DIR, UPLOAD_DIR, PDF_DIR):
 
 
 def _connect():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.execute("PRAGMA busy_timeout = 10000")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -134,6 +135,7 @@ def init_db():
                 aplikasi_json  TEXT NOT NULL DEFAULT '[]',
                 review_notes   TEXT NOT NULL DEFAULT '',
                 feedback_draft TEXT NOT NULL DEFAULT '', -- private until lead sends it
+                version        INTEGER NOT NULL DEFAULT 1,
                 updated_at     TEXT NOT NULL,
                 UNIQUE(week_id, day_index)
             )
@@ -147,6 +149,8 @@ def init_db():
             conn.execute("ALTER TABLE day_drafts ADD COLUMN aplikasi_json TEXT NOT NULL DEFAULT '[]'")
         if "feedback_draft" not in draft_cols:
             conn.execute("ALTER TABLE day_drafts ADD COLUMN feedback_draft TEXT NOT NULL DEFAULT ''")
+        if "version" not in draft_cols:
+            conn.execute("ALTER TABLE day_drafts ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
 
 
 def _now_iso():
@@ -433,21 +437,28 @@ def assign_draft(draft_id, contributor_id):
 
 
 def save_draft_content(draft_id, theme, verse, context, firman_kristus, questions, status,
-                        key_message="", m1="", m3="", m4="", aplikasi=None):
+                        key_message="", m1="", m3="", m4="", aplikasi=None, expected_version=None):
     """key_message/m1/m3/m4/aplikasi are AY-only fields; left at their
     defaults, an Umum day's row simply keeps them blank."""
     with _connect() as conn:
-        conn.execute(
-            """
+        query = """
             UPDATE day_drafts SET theme=?, verse=?, context=?, firman_kristus=?,
                 questions_json=?, key_message=?, m1=?, m3=?, m4=?, aplikasi_json=?,
-                status=?, updated_at=?
+                status=?, updated_at=?, version=version+1
             WHERE id = ?
-            """,
-            (theme, verse, context, firman_kristus, json.dumps(questions, ensure_ascii=False),
-             key_message, m1, m3, m4, json.dumps(aplikasi or [], ensure_ascii=False),
-             status, _now_iso(), draft_id),
+        """
+        values = [
+            theme, verse, context, firman_kristus, json.dumps(questions, ensure_ascii=False),
+            key_message, m1, m3, m4, json.dumps(aplikasi or [], ensure_ascii=False),
+            status, _now_iso(), draft_id,
+        ]
+        if expected_version is not None:
+            query += " AND version = ?"
+            values.append(expected_version)
+        cur = conn.execute(
+            query, values,
         )
+    return cur.rowcount == 1
 
 
 def review_draft(draft_id, status, review_notes=""):

@@ -13,6 +13,7 @@
 
 {% if writer_can_edit %}
 <form class="formcard" method="post">
+  <input type="hidden" name="version" value="{{ draft.version }}">
   <label>Theme</label>
   <input type="text" name="theme" value="{{ draft.theme }}" required>
 
@@ -161,9 +162,11 @@
       var data = new FormData(form);
       data.set("action", "autosave");
       fetch(window.location.href, { method: "POST", body: data, credentials: "same-origin" })
-        .then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
+        .then(function (response) { if (!response.ok) throw new Error(response.status === 409 ? "conflict" : "request"); return response.json(); })
         .then(function () { dirty = false; status.textContent = "Saved automatically."; })
-        .catch(function () { status.textContent = "Could not save automatically. Use Save draft."; })
+        .catch(function (error) {
+          status.textContent = error && error.message === "conflict" ? "This draft changed elsewhere. Reload before saving." : "Could not save automatically. Use Save draft.";
+        })
         .finally(function () { saving = false; });
     }
     window.setInterval(autosave, 20000);
