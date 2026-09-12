@@ -11,7 +11,7 @@ from markupsafe import Markup, escape
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, send_file, send_from_directory, abort, flash,
+    session, send_file, send_from_directory, abort, flash, jsonify,
 )
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -917,7 +917,11 @@ def contrib_day(draft_id):
     if request.method == "POST":
         action = request.form.get("action")
 
-        if action in ("save", "submit") and (writer_can_edit or is_lead):
+        if action in ("save", "submit", "lead_save", "autosave") and (writer_can_edit or is_lead):
+            if action == "lead_save" and not is_lead:
+                abort(403)
+            if action == "autosave" and not writer_can_edit:
+                abort(403)
             verse = request.form.get("verse", "").strip()
 
             # Pertanyaan needs its own chosen verse per question only for AY
@@ -965,16 +969,33 @@ def contrib_day(draft_id):
                 m4=request.form.get("m4", "").strip() if division == "ay" else "",
                 aplikasi=aplikasi if division == "ay" else [],
             )
-            flash("Submitted for review." if action == "submit" else "Draft saved.")
+            if action == "lead_save":
+                db.update_feedback_draft(draft_id, request.form.get("feedback_draft", "").strip())
+                flash("Lead edits saved. Feedback remains private until you send it to the writer.")
+            elif action == "autosave":
+                return jsonify({"ok": True})
+            else:
+                flash("Submitted for review." if action == "submit" else "Draft saved.")
 
         elif action == "approve" and is_lead:
-            db.review_draft(draft_id, "approved", "")
+            db.review_draft(draft_id, "approved", draft["review_notes"])
             flash(f"Approved {draft['day_name']}.")
 
         elif action == "request_changes" and is_lead:
             notes = request.form.get("review_notes", "").strip()
-            db.review_draft(draft_id, "changes_requested", notes)
+            if not notes:
+                flash("Add feedback before requesting changes.")
+                return redirect(url_for("contrib_day", draft_id=draft_id))
+            db.publish_feedback(draft_id, notes, status="changes_requested")
             flash(f"Sent {draft['day_name']} back for changes.")
+
+        elif action == "publish_feedback" and is_lead:
+            notes = request.form.get("review_notes", "").strip()
+            if not notes:
+                flash("Add feedback before sending it to the writer.")
+                return redirect(url_for("contrib_day", draft_id=draft_id))
+            db.publish_feedback(draft_id, notes)
+            flash("Feedback sent to the writer.")
 
         else:
             abort(403)
